@@ -145,7 +145,7 @@ async function callClaude(prompt, onResult, onLoading) {
     const text = data.content?.find(b=>b.type==="text")?.text || "בוא נמשיך לשחק! 🃏";
     onResult(text);
   } catch {
-    onResult("המשך לשחק — הניסיון הוא המורה הטוב ביותר! 🃏");
+    onResult("...");
   }
   if(onLoading) onLoading(false);
 }
@@ -186,6 +186,7 @@ function TeacherBubble({ message, loading, compact=false, gameCtx=null }) {
               ? <RichText text={message} gameCtx={gameCtx}/>
               : message
             }
+            {gameCtx && <div style={{fontSize:10,color:"#6a9a6a",marginTop:4}}>💡 מילים <span style={{color:"#f0c040",borderBottom:"1px dashed #f0c040"}}>מודגשות</span> — לחצי להסבר</div>}
           </div>
         )}
       </div>
