@@ -551,84 +551,85 @@ ${picked?picked.prompt(gs.playerHand,gs.botHand,comm):""}
     <div style={cs.app}>
       <style>{`@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}} @keyframes slideIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}`}</style>
 
-      {/* Header row */}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-        <button onClick={onExit} style={{padding:"6px 12px",borderRadius:7,border:"1px solid rgba(255,255,255,0.1)",background:"rgba(255,255,255,0.05)",color:"#8a9a8a",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:12}}>← יציאה</button>
-        <div style={{fontSize:14,fontWeight:700,color:"#c9a84c",letterSpacing:0.5}}>🎓 לומד תוך כדי משחק</div>
-        <div style={{fontSize:11,color:"#6a9a6a"}}>סיבוב {roundNum}</div>
-      </div>
-
-      {/* Stats row */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-        <div style={{fontSize:11,color:"#c9a84c",fontWeight:700}}>💰 {playerChips}</div>
+      {/* Header + stats combined */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+        <button onClick={onExit} style={{padding:"5px 10px",borderRadius:6,border:"1px solid rgba(255,255,255,0.1)",background:"rgba(255,255,255,0.05)",color:"#8a9a8a",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:11}}>← יציאה</button>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          {score.total>0 && <div style={{fontSize:10,color:score.good/score.total>=0.6?"#27ae60":"#f39c12"}}>✓ {score.good}/{score.total}</div>}
-          <div style={{background:"rgba(201,168,76,0.14)",border:"1px solid rgba(201,168,76,0.28)",borderRadius:18,padding:"2px 12px",fontSize:11,color:"#c9a84c",fontWeight:700}}>סיר {pot}</div>
+          <span style={{fontSize:11,color:"#c9a84c",fontWeight:700}}>💰{playerChips}</span>
+          <div style={{background:"rgba(201,168,76,0.14)",border:"1px solid rgba(201,168,76,0.28)",borderRadius:14,padding:"2px 10px",fontSize:11,color:"#c9a84c",fontWeight:700}}>סיר {pot}</div>
+          <span style={{fontSize:11,color:"#6a9a6a",fontWeight:700}}>🤖{botChips}</span>
         </div>
-        <div style={{fontSize:11,color:"#6a9a6a",fontWeight:700}}>🤖 {botChips}</div>
+        <div style={{fontSize:10,color:"#6a9a6a"}}>סיבוב {roundNum}</div>
       </div>
 
       {/* Stage track */}
       <div style={{display:"flex",gap:2,marginBottom:4}}>
         {["פרה-פלופ","פלופ","טרן","ריבר"].map((n,i)=>(
           <div key={n} style={{flex:1}}>
-            <div style={{height:4,borderRadius:2,background:i<stageIdx?"#c9a84c":i===stageIdx?"rgba(201,168,76,0.55)":"rgba(255,255,255,0.07)",transition:"background 0.4s"}}/>
-            <div style={{fontSize:8,color:i<=stageIdx?"#c9a84c":"#333",textAlign:"center",marginTop:2}}>{n}</div>
+            <div style={{height:3,borderRadius:2,background:i<stageIdx?"#c9a84c":i===stageIdx?"rgba(201,168,76,0.55)":"rgba(255,255,255,0.07)"}}/>
+            <div style={{fontSize:8,color:i<=stageIdx?"#c9a84c":"#333",textAlign:"center",marginTop:1}}>{n}</div>
           </div>
         ))}
       </div>
 
-      {/* Concept of round */}
-      {pickedConcept && (
-        <div style={{marginBottom:10,display:"flex",gap:6,alignItems:"center"}}>
-          <span style={{fontSize:10,color:"#6a9a6a"}}>מושג הסיבוב:</span>
-          <Tag emoji={pickedConcept.emoji} text={pickedConcept.label}/>
-        </div>
-      )}
-
-      {/* Coach bubble */}
-      <TeacherBubble message={coachMsg} loading={coachLoading} compact
-        gameCtx={{playerHand:gs.playerHand, community:communityShow, pot, stage, currentScore:ctx.current.score, drawFlush:ctx.drawFlush, drawStraight:ctx.drawStraight}}
-      />
-
-      {/* Bot row */}
-      <div style={{...cs.panel,marginBottom:5}}>
-        <div style={{fontSize:9,color:"#6a9a6a",marginBottom:4}}>🤖 יריב</div>
-        <div style={{display:"flex",gap:4,alignItems:"center"}}>
-          {(isResult&&stage==="showdown")
-            ? gs.botHand.map((c,i)=><Card key={i} str={c} small/>)
-            : gs.botHand.map((_,i)=><Card key={i} str="X♠" hidden small/>)
+      {/* Concept + Coach bubble */}
+      <div style={{background:"linear-gradient(135deg,rgba(22,62,36,0.93),rgba(12,35,20,0.96))",border:"1px solid #c9a84c",borderRadius:10,padding:"8px 12px",marginBottom:5,display:"flex",gap:8,alignItems:"flex-start"}}>
+        <div style={{width:30,height:30,borderRadius:"50%",background:"linear-gradient(135deg,#c9a84c,#8b6914)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>🎩</div>
+        <div style={{flex:1}}>
+          <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:3}}>
+            <span style={{color:"#c9a84c",fontSize:9,fontWeight:700,letterSpacing:1}}>מאסטר פוקר</span>
+            {pickedConcept && <Tag emoji={pickedConcept.emoji} text={pickedConcept.label}/>}
+          </div>
+          {coachLoading
+            ? <div style={{display:"flex",gap:4}}>{[0,1,2].map(i=><div key={i} style={{width:5,height:5,borderRadius:"50%",background:"#c9a84c",animation:"bounce 1.2s infinite",animationDelay:`${i*0.2}s`}}/>)}</div>
+            : <div style={{color:"#d4e8d4",fontSize:12,lineHeight:1.6,direction:"rtl",textAlign:"right"}}>
+                <RichText text={coachMsg} gameCtx={{playerHand:gs.playerHand,community:communityShow,pot,stage,currentScore:ctx.current.score,drawFlush:ctx.drawFlush,drawStraight:ctx.drawStraight}}/>
+                <div style={{fontSize:9,color:"#6a9a6a",marginTop:3}}>💡 מילים <span style={{color:"#f0c040",borderBottom:"1px dashed #f0c040"}}>מודגשות</span> — לחצי להסבר</div>
+              </div>
           }
-          {isResult&&resultData?.be && <span style={{fontSize:11,color:"#6a9a6a",marginRight:8}}>{resultData.be.name}</span>}
         </div>
       </div>
 
-      {/* Community */}
-      <div style={cs.panel}>
-        <div style={{fontSize:10,color:"#6a9a6a",marginBottom:7}}>🂠 לוח — {STAGE_NAMES[stage]}</div>
-        <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-          {communityShow.map((c,i)=><Card key={i} str={c}/>)}
-          {Array(5-communityShow.length).fill(null).map((_,i)=>(
-            <div key={i} style={{width:60,height:86,borderRadius:8,border:"2px dashed rgba(201,168,76,0.12)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <span style={{color:"rgba(201,168,76,0.12)",fontSize:16}}>?</span>
-            </div>
-          ))}
+      {/* Bot + Community side by side */}
+      <div style={{display:"flex",gap:5,marginBottom:5}}>
+        {/* Bot */}
+        <div style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(201,168,76,0.2)",borderRadius:8,padding:"6px 8px",flexShrink:0}}>
+          <div style={{fontSize:9,color:"#6a9a6a",marginBottom:4}}>🤖</div>
+          <div style={{display:"flex",gap:3}}>
+            {(isResult&&stage==="showdown")
+              ? gs.botHand.map((c,i)=><Card key={i} str={c} small/>)
+              : gs.botHand.map((_,i)=><Card key={i} str="X♠" hidden small/>)
+            }
+          </div>
+          {isResult&&resultData?.be && <div style={{fontSize:9,color:"#6a9a6a",marginTop:3}}>{resultData.be.name}</div>}
+        </div>
+
+        {/* Community */}
+        <div style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(201,168,76,0.2)",borderRadius:8,padding:"6px 8px",flex:1}}>
+          <div style={{fontSize:9,color:"#6a9a6a",marginBottom:4}}>🂠 {STAGE_NAMES[stage]}</div>
+          <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
+            {communityShow.map((c,i)=><Card key={i} str={c} small/>)}
+            {Array(5-communityShow.length).fill(null).map((_,i)=>(
+              <div key={i} style={{width:40,height:58,borderRadius:5,border:"1px dashed rgba(201,168,76,0.12)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <span style={{color:"rgba(201,168,76,0.15)",fontSize:12}}>?</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Player hand + analysis */}
-      <div style={{...cs.panel,border:"1px solid rgba(201,168,76,0.35)"}}>
-        <div style={{fontSize:10,color:"#c9a84c",marginBottom:8}}>✋ הקלפים שלך</div>
-        <div style={{display:"flex",gap:6,alignItems:"flex-start",marginBottom:10}}>
-          <div style={{display:"flex",gap:5}}>
-            {gs.playerHand.map((c,i)=><Card key={i} str={c} highlight/>)}
+      <div style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(201,168,76,0.35)",borderRadius:8,padding:"6px 10px",marginBottom:5}}>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <div style={{display:"flex",gap:4}}>
+            {gs.playerHand.map((c,i)=><Card key={i} str={c} small highlight/>)}
           </div>
-          <div style={{flex:1,minWidth:0,paddingTop:2}}>
+          <div style={{flex:1,minWidth:0}}>
             <StrengthBar value={ctx.strength} label={ctx.current.name}/>
-            <div style={{fontSize:11,color:"#a0c0a0",marginTop:5,lineHeight:1.5}}>{ctx.potential}</div>
+            <div style={{fontSize:10,color:"#a0c0a0",marginTop:3,lineHeight:1.4}}>{ctx.potential}</div>
           </div>
         </div>
-        <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+        <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:5}}>
           {ctx.drawFlush && <Tag emoji="🃏" text="דרא לפלאש" color="#9b59b6"/>}
           {ctx.drawStraight && <Tag emoji="↔️" text="דרא לסטרייט" color="#3498db"/>}
           {ctx.pairs.length>0 && <Tag emoji="👫" text={`${ctx.pairs.length} זוג`} color="#27ae60"/>}
