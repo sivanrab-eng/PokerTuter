@@ -637,57 +637,40 @@ ${picked?picked.prompt(gs.playerHand,gs.botHand,comm):""}
         </div>
       </div>
 
-      {/* Feedback panel */}
+      {/* Feedback panel — compact, max 2 lines */}
       {(feedback||feedbackLoading) && (
-        <div style={{...cs.panel,border:"1px solid rgba(201,168,76,0.32)",animation:"slideIn 0.5s ease"}}>
-          <div style={{fontSize:10,color:"#c9a84c",fontWeight:700,marginBottom:6}}>📝 ניתוח + מושג: {pickedConcept?.label}</div>
+        <div style={{background:"rgba(201,168,76,0.07)",border:"1px solid rgba(201,168,76,0.28)",borderRadius:8,padding:"6px 10px",marginBottom:5}}>
+          <div style={{fontSize:9,color:"#c9a84c",fontWeight:700,marginBottom:3}}>📝 {pickedConcept?.label}</div>
           {feedbackLoading
-            ? <div style={{display:"flex",gap:4}}>{[0,1,2].map(i=><div key={i} style={{width:6,height:6,borderRadius:"50%",background:"#c9a84c",animation:"bounce 1.2s infinite",animationDelay:`${i*0.2}s`}}/>)}</div>
-            : <div style={{color:"#d4e8d4",fontSize:12,lineHeight:1.8}}>{feedback}</div>
+            ? <div style={{display:"flex",gap:4}}>{[0,1,2].map(i=><div key={i} style={{width:5,height:5,borderRadius:"50%",background:"#c9a84c",animation:"bounce 1.2s infinite",animationDelay:`${i*0.2}s`}}/>)}</div>
+            : <div style={{color:"#d4e8d4",fontSize:11,lineHeight:1.6,maxHeight:52,overflow:"hidden"}}>{feedback}</div>
           }
         </div>
       )}
 
-      {/* Action log */}
-      {actionLog.length>0 && (
-        <div style={{marginBottom:10}}>
-          {actionLog.slice(0,3).map((l,i)=>(
-            <div key={l.id} style={{fontSize:10,color:l.action==="fold"?"#e74c3c":l.action==="raise"?"#f39c12":"#27ae60",opacity:1-i*0.3,marginBottom:2}}>
-              {l.round} → {l.action==="fold"?"❌ פולד":l.action==="raise"?"📈 ריייז":"✅ קול"}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Result banner */}
+      {/* Result banner — compact */}
       {isResult && resultData && (
-        <div style={{
-          background:resultData.type==="fold"?"rgba(192,57,43,0.2)":resultData.won?"rgba(39,174,96,0.2)":resultData.tied?"rgba(201,168,76,0.14)":"rgba(192,57,43,0.2)",
-          border:`1px solid ${resultData.type==="fold"?"#e74c3c":resultData.won?"#27ae60":resultData.tied?"#c9a84c":"#e74c3c"}`,
-          borderRadius:10,padding:12,textAlign:"center",marginBottom:10,animation:"slideIn 0.5s ease"
-        }}>
-          <div style={{fontSize:22,marginBottom:4}}>
-            {resultData.type==="fold"?"🏳️":resultData.won?"🏆":resultData.tied?"🤝":"💸"}
-          </div>
-          <div style={{fontWeight:700,fontSize:14,color:"#fff",marginBottom:3}}>
-            {resultData.type==="fold"?"פולדת — הבוט מנצח":resultData.won?"ניצחת!":resultData.tied?"תיקו!":"הפסדת"}
-          </div>
-          {resultData.pe&&<div style={{fontSize:11,color:"#a0c0a0"}}>שלך: {resultData.pe.name} · בוט: {resultData.be.name}</div>}
+        <div style={{background:resultData.won?"rgba(39,174,96,0.2)":resultData.tied?"rgba(201,168,76,0.14)":"rgba(192,57,43,0.2)",border:`1px solid ${resultData.won?"#27ae60":resultData.tied?"#c9a84c":"#e74c3c"}`,borderRadius:8,padding:"8px 12px",textAlign:"center",marginBottom:5}}>
+          <span style={{fontSize:18}}>{resultData.type==="fold"?"🏳️":resultData.won?"🏆":resultData.tied?"🤝":"💸"}</span>
+          <span style={{fontWeight:700,fontSize:13,color:"#fff",marginRight:8}}>{resultData.type==="fold"?"פולדת":resultData.won?"ניצחת!":resultData.tied?"תיקו!":"הפסדת"}</span>
+          {resultData.pe&&<span style={{fontSize:10,color:"#a0c0a0"}}>{resultData.pe.name} vs {resultData.be.name}</span>}
         </div>
       )}
 
-      {/* Action buttons */}
-      {!isResult ? (
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-          {["call","raise","fold"].map(a=>(
-            <ActionBtnWithHelp key={a} action={a} onClick={()=>doAction(a)}
-              gameCtx={{playerHand:gs.playerHand, community:communityShow, pot, stage, currentScore:ctx.current.score, drawFlush:ctx.drawFlush, drawStraight:ctx.drawStraight}}
-            />
-          ))}
-        </div>
-      ):(
-        <Btn label="🔄 סיבוב חדש — בוא נלמד עוד!" variant="gold" full onClick={()=>{setRoundNum(n=>n+1);deal();}}/>
-      )}
+      {/* Action buttons — always at bottom */}
+      <div style={{marginTop:"auto"}}>
+        {!isResult ? (
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+            {["call","raise","fold"].map(a=>(
+              <ActionBtnWithHelp key={a} action={a} onClick={()=>doAction(a)}
+                gameCtx={{playerHand:gs.playerHand, community:communityShow, pot, stage, currentScore:ctx.current.score, drawFlush:ctx.drawFlush, drawStraight:ctx.drawStraight}}
+              />
+            ))}
+          </div>
+        ):(
+          <Btn label="🔄 סיבוב חדש" variant="gold" full onClick={()=>{setRoundNum(n=>n+1);deal();}}/>
+        )}
+      </div>
     </div>
   );
 }
