@@ -171,7 +171,7 @@ function Card({ str, hidden=false, small=false, highlight=false }) {
 
 function TeacherBubble({ message, loading, compact=false, gameCtx=null }) {
   return(
-    <div style={{background:"linear-gradient(135deg,rgba(22,62,36,0.93),rgba(12,35,20,0.96))",border:"1px solid #c9a84c",borderRadius:12,padding:compact?"11px 13px":"15px 18px",display:"flex",gap:12,alignItems:"flex-start",marginBottom:12,boxShadow:"0 4px 18px rgba(0,0,0,0.4)"}}>
+    <div style={{background:"linear-gradient(135deg,rgba(22,62,36,0.93),rgba(12,35,20,0.96))",border:"1px solid #c9a84c",borderRadius:12,padding:compact?"8px 10px":"15px 18px",display:"flex",gap:10,alignItems:"flex-start",marginBottom:compact?6:12,boxShadow:"0 4px 18px rgba(0,0,0,0.4)"}}>
       <div style={{width:compact?34:40,height:compact?34:40,borderRadius:"50%",background:"linear-gradient(135deg,#c9a84c,#8b6914)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:compact?18:21,flexShrink:0,boxShadow:"0 2px 8px rgba(201,168,76,0.35)"}}>🎩</div>
       <div style={{flex:1}}>
         <div style={{color:"#c9a84c",fontSize:10,fontWeight:700,marginBottom:5,letterSpacing:1.2}}>מאסטר פוקר</div>
@@ -186,7 +186,6 @@ function TeacherBubble({ message, loading, compact=false, gameCtx=null }) {
               ? <RichText text={message} gameCtx={gameCtx}/>
               : message
             }
-            {gameCtx && <div style={{fontSize:10,color:"#6a9a6a",marginTop:6}}>💡 מילים <span style={{color:"#f0c040",borderBottom:"1px dashed #f0c040"}}>מודגשות</span> — לחצי להסבר</div>}
           </div>
         )}
       </div>
@@ -542,9 +541,9 @@ ${picked?picked.prompt(gs.playerHand,gs.botHand,comm):""}
   const pickedConcept = CONCEPTS.find(c=>c.key===concept);
 
   const cs = {
-    app:{minHeight:"100vh",background:"radial-gradient(ellipse at 15% 10%,#081e10,#040c07 70%)",fontFamily:"Georgia,serif",color:"#d4e8d4",padding:"14px 14px 24px",direction:"rtl"},
-    panel:{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(201,168,76,0.2)",borderRadius:10,padding:"11px 13px",marginBottom:10},
-    quizBtn:(active)=>({flex:1,padding:"9px 6px",borderRadius:8,border:active?"2px solid #c9a84c":"1px solid rgba(255,255,255,0.1)",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:12,fontWeight:700,background:active?"rgba(201,168,76,0.18)":"rgba(255,255,255,0.05)",color:active?"#c9a84c":"#a0b0a0",transition:"all 0.2s"}),
+    app:{height:"100vh",overflow:"hidden",background:"radial-gradient(ellipse at 15% 10%,#081e10,#040c07 70%)",fontFamily:"Georgia,serif",color:"#d4e8d4",padding:"8px 12px",direction:"rtl",display:"flex",flexDirection:"column",gap:0},
+    panel:{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(201,168,76,0.2)",borderRadius:8,padding:"7px 10px",marginBottom:6},
+    quizBtn:(active)=>({flex:1,padding:"7px 4px",borderRadius:7,border:active?"2px solid #c9a84c":"1px solid rgba(255,255,255,0.1)",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:11,fontWeight:700,background:active?"rgba(201,168,76,0.18)":"rgba(255,255,255,0.05)",color:active?"#c9a84c":"#a0b0a0",transition:"all 0.2s"}),
   };
 
   return(
@@ -613,8 +612,8 @@ ${picked?picked.prompt(gs.playerHand,gs.botHand,comm):""}
       />
 
       {/* Bot row */}
-      <div style={cs.panel}>
-        <div style={{fontSize:10,color:"#6a9a6a",marginBottom:6}}>🤖 יריב</div>
+      <div style={{...cs.panel,marginBottom:5}}>
+        <div style={{fontSize:9,color:"#6a9a6a",marginBottom:4}}>🤖 יריב</div>
         <div style={{display:"flex",gap:4,alignItems:"center"}}>
           {(isResult&&stage==="showdown")
             ? gs.botHand.map((c,i)=><Card key={i} str={c} small/>)
