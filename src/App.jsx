@@ -542,7 +542,7 @@ ${picked?picked.prompt(gs.playerHand,gs.botHand,comm):""}
   const pickedConcept = CONCEPTS.find(c=>c.key===concept);
 
   const cs = {
-    app:{height:"100vh",overflow:"hidden",background:"radial-gradient(ellipse at 15% 10%,#081e10,#040c07 70%)",fontFamily:"Georgia,serif",color:"#d4e8d4",padding:"8px 12px",direction:"rtl",display:"flex",flexDirection:"column",gap:0},
+    app:{minHeight:"100vh",background:"radial-gradient(ellipse at 15% 10%,#081e10,#040c07 70%)",fontFamily:"Georgia,serif",color:"#d4e8d4",padding:"10px 12px 20px",direction:"rtl"},
     panel:{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(201,168,76,0.2)",borderRadius:8,padding:"7px 10px",marginBottom:6},
     quizBtn:(active)=>({flex:1,padding:"7px 4px",borderRadius:7,border:active?"2px solid #c9a84c":"1px solid rgba(255,255,255,0.1)",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:11,fontWeight:700,background:active?"rgba(201,168,76,0.18)":"rgba(255,255,255,0.05)",color:active?"#c9a84c":"#a0b0a0",transition:"all 0.2s"}),
   };
@@ -591,22 +591,22 @@ ${picked?picked.prompt(gs.playerHand,gs.botHand,comm):""}
       </div>
 
       {/* Bot + Community side by side */}
-      <div style={{display:"flex",gap:5,marginBottom:5}}>
+      <div style={{display:"flex",gap:5,marginBottom:10}}>
         {/* Bot */}
-        <div style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(201,168,76,0.2)",borderRadius:8,padding:"6px 8px",flexShrink:0}}>
-          <div style={{fontSize:9,color:"#6a9a6a",marginBottom:4}}>🤖</div>
+        <div style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(201,168,76,0.2)",borderRadius:8,padding:"8px 10px",flexShrink:0}}>
+          <div style={{fontSize:9,color:"#6a9a6a",marginBottom:8}}>🤖</div>
           <div style={{display:"flex",gap:3}}>
             {(isResult&&stage==="showdown")
               ? gs.botHand.map((c,i)=><Card key={i} str={c} small/>)
               : gs.botHand.map((_,i)=><Card key={i} str="X♠" hidden small/>)
             }
           </div>
-          {isResult&&resultData?.be && <div style={{fontSize:9,color:"#6a9a6a",marginTop:3}}>{resultData.be.name}</div>}
+          {isResult&&resultData?.be && <div style={{fontSize:9,color:"#6a9a6a",marginTop:4}}>{resultData.be.name}</div>}
         </div>
 
         {/* Community */}
-        <div style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(201,168,76,0.2)",borderRadius:8,padding:"6px 8px",flex:1}}>
-          <div style={{fontSize:9,color:"#6a9a6a",marginBottom:4}}>🂠 {STAGE_NAMES[stage]}</div>
+        <div style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(201,168,76,0.2)",borderRadius:8,padding:"8px 10px",flex:1}}>
+          <div style={{fontSize:9,color:"#6a9a6a",marginBottom:8}}>🂠 {STAGE_NAMES[stage]}</div>
           <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
             {communityShow.map((c,i)=><Card key={i} str={c} small/>)}
             {Array(5-communityShow.length).fill(null).map((_,i)=>(
@@ -619,7 +619,7 @@ ${picked?picked.prompt(gs.playerHand,gs.botHand,comm):""}
       </div>
 
       {/* Player hand + analysis */}
-      <div style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(201,168,76,0.35)",borderRadius:8,padding:"6px 10px",marginBottom:5}}>
+      <div style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(201,168,76,0.35)",borderRadius:8,padding:"8px 12px",marginBottom:10}}>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
           <div style={{display:"flex",gap:4}}>
             {gs.playerHand.map((c,i)=><Card key={i} str={c} small highlight/>)}
@@ -629,7 +629,7 @@ ${picked?picked.prompt(gs.playerHand,gs.botHand,comm):""}
             <div style={{fontSize:10,color:"#a0c0a0",marginTop:3,lineHeight:1.4}}>{ctx.potential}</div>
           </div>
         </div>
-        <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:5}}>
+        <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:6}}>
           {ctx.drawFlush && <Tag emoji="🃏" text="דרא לפלאש" color="#9b59b6"/>}
           {ctx.drawStraight && <Tag emoji="↔️" text="דרא לסטרייט" color="#3498db"/>}
           {ctx.pairs.length>0 && <Tag emoji="👫" text={`${ctx.pairs.length} זוג`} color="#27ae60"/>}
@@ -637,9 +637,9 @@ ${picked?picked.prompt(gs.playerHand,gs.botHand,comm):""}
         </div>
       </div>
 
-      {/* Feedback panel — compact, max 2 lines */}
+      {/* Feedback panel */}
       {(feedback||feedbackLoading) && (
-        <div style={{background:"rgba(201,168,76,0.07)",border:"1px solid rgba(201,168,76,0.28)",borderRadius:8,padding:"6px 10px",marginBottom:5}}>
+        <div style={{background:"rgba(201,168,76,0.07)",border:"1px solid rgba(201,168,76,0.28)",borderRadius:8,padding:"8px 10px",marginBottom:10}}>
           <div style={{fontSize:9,color:"#c9a84c",fontWeight:700,marginBottom:3}}>📝 {pickedConcept?.label}</div>
           {feedbackLoading
             ? <div style={{display:"flex",gap:4}}>{[0,1,2].map(i=><div key={i} style={{width:5,height:5,borderRadius:"50%",background:"#c9a84c",animation:"bounce 1.2s infinite",animationDelay:`${i*0.2}s`}}/>)}</div>
@@ -648,29 +648,27 @@ ${picked?picked.prompt(gs.playerHand,gs.botHand,comm):""}
         </div>
       )}
 
-      {/* Result banner — compact */}
+      {/* Result banner */}
       {isResult && resultData && (
-        <div style={{background:resultData.won?"rgba(39,174,96,0.2)":resultData.tied?"rgba(201,168,76,0.14)":"rgba(192,57,43,0.2)",border:`1px solid ${resultData.won?"#27ae60":resultData.tied?"#c9a84c":"#e74c3c"}`,borderRadius:8,padding:"8px 12px",textAlign:"center",marginBottom:5}}>
+        <div style={{background:resultData.won?"rgba(39,174,96,0.2)":resultData.tied?"rgba(201,168,76,0.14)":"rgba(192,57,43,0.2)",border:`1px solid ${resultData.won?"#27ae60":resultData.tied?"#c9a84c":"#e74c3c"}`,borderRadius:8,padding:"8px 12px",textAlign:"center",marginBottom:10}}>
           <span style={{fontSize:18}}>{resultData.type==="fold"?"🏳️":resultData.won?"🏆":resultData.tied?"🤝":"💸"}</span>
           <span style={{fontWeight:700,fontSize:13,color:"#fff",marginRight:8}}>{resultData.type==="fold"?"פולדת":resultData.won?"ניצחת!":resultData.tied?"תיקו!":"הפסדת"}</span>
           {resultData.pe&&<span style={{fontSize:10,color:"#a0c0a0"}}>{resultData.pe.name} vs {resultData.be.name}</span>}
         </div>
       )}
 
-      {/* Action buttons — always at bottom */}
-      <div style={{marginTop:"auto"}}>
-        {!isResult ? (
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
-            {["call","raise","fold"].map(a=>(
-              <ActionBtnWithHelp key={a} action={a} onClick={()=>doAction(a)}
-                gameCtx={{playerHand:gs.playerHand, community:communityShow, pot, stage, currentScore:ctx.current.score, drawFlush:ctx.drawFlush, drawStraight:ctx.drawStraight}}
-              />
-            ))}
-          </div>
-        ):(
-          <Btn label="🔄 סיבוב חדש" variant="gold" full onClick={()=>{setRoundNum(n=>n+1);deal();}}/>
-        )}
-      </div>
+      {/* Action buttons */}
+      {!isResult ? (
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+          {["call","raise","fold"].map(a=>(
+            <ActionBtnWithHelp key={a} action={a} onClick={()=>doAction(a)}
+              gameCtx={{playerHand:gs.playerHand, community:communityShow, pot, stage, currentScore:ctx.current.score, drawFlush:ctx.drawFlush, drawStraight:ctx.drawStraight}}
+            />
+          ))}
+        </div>
+      ):(
+        <Btn label="🔄 סיבוב חדש" variant="gold" full onClick={()=>{setRoundNum(n=>n+1);deal();}}/>
+      )}
     </div>
   );
 }
