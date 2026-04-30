@@ -145,7 +145,7 @@ async function callClaude(prompt, onResult, onLoading) {
     const text = data.content?.find(b=>b.type==="text")?.text || "בוא נמשיך לשחק! 🃏";
     onResult(text);
   } catch {
-    onResult("...");
+    onResult("המשך לשחק — הניסיון הוא המורה הטוב ביותר! 🃏");
   }
   if(onLoading) onLoading(false);
 }
@@ -636,19 +636,6 @@ ${picked?picked.prompt(gs.playerHand,gs.botHand,comm):""}
         </div>
       </div>
 
-      {/* Quiz - what would you do? */}
-      {!isResult && (
-        <div style={{...cs.panel,border:"1px solid rgba(52,152,219,0.35)",animation:"slideIn 0.4s ease"}}>
-          <div style={{fontSize:11,color:"#3498db",fontWeight:700,marginBottom:7}}>🤔 מה הייית עושה?</div>
-          <div style={{display:"flex",gap:6}}>
-            {[{v:"call",l:"✅ קול"},{v:"raise",l:"📈 ריייז"},{v:"fold",l:"❌ פולד"}].map(({v,l})=>(
-              <button key={v} style={cs.quizBtn(quizChoice===v)} onClick={()=>setQuizChoice(v)}>{l}</button>
-            ))}
-          </div>
-          {quizChoice && <div style={{fontSize:10,color:"#6a9a6a",marginTop:6}}>בחרת {quizChoice==="call"?"קול":quizChoice==="raise"?"ריייז":"פולד"} — עכשיו בצע את הפעולה בכפתורים למטה</div>}
-        </div>
-      )}
-
       {/* Feedback panel */}
       {(feedback||feedbackLoading) && (
         <div style={{...cs.panel,border:"1px solid rgba(201,168,76,0.32)",animation:"slideIn 0.5s ease"}}>
@@ -685,7 +672,6 @@ ${picked?picked.prompt(gs.playerHand,gs.botHand,comm):""}
             {resultData.type==="fold"?"פולדת — הבוט מנצח":resultData.won?"ניצחת!":resultData.tied?"תיקו!":"הפסדת"}
           </div>
           {resultData.pe&&<div style={{fontSize:11,color:"#a0c0a0"}}>שלך: {resultData.pe.name} · בוט: {resultData.be.name}</div>}
-          {score.total>0&&<div style={{marginTop:6,fontSize:11,color:"#c9a84c"}}>ניחושים נכונים: {score.good}/{score.total} ({Math.round(score.good/score.total*100)}%)</div>}
         </div>
       )}
 
