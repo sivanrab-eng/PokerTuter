@@ -555,29 +555,8 @@ ${picked?picked.prompt(gs.playerHand,gs.botHand,comm):""}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
         <button onClick={onExit} style={{padding:"6px 12px",borderRadius:7,border:"1px solid rgba(255,255,255,0.1)",background:"rgba(255,255,255,0.05)",color:"#8a9a8a",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:12}}>← יציאה</button>
         <div style={{fontSize:14,fontWeight:700,color:"#c9a84c",letterSpacing:0.5}}>🎓 לומד תוך כדי משחק</div>
-        <button onClick={()=>setShowGlossary(g=>!g)} style={{padding:"6px 10px",borderRadius:7,border:"1px solid rgba(201,168,76,0.35)",background:showGlossary?"rgba(201,168,76,0.15)":"rgba(255,255,255,0.05)",color:"#c9a84c",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:12,fontWeight:700}}>📖</button>
+        <div style={{fontSize:11,color:"#6a9a6a"}}>סיבוב {roundNum}</div>
       </div>
-
-      {/* Glossary overlay inside coach mode */}
-      {showGlossary && (
-        <div style={{background:"rgba(5,15,8,0.97)",border:"1px solid rgba(201,168,76,0.4)",borderRadius:12,padding:"14px",marginBottom:12,animation:"slideIn 0.25s ease",maxHeight:340,overflowY:"auto"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-            <span style={{fontSize:13,fontWeight:700,color:"#c9a84c"}}>📖 מילון מינוחים</span>
-            <button onClick={()=>setShowGlossary(false)} style={{background:"none",border:"none",color:"#6a9a6a",cursor:"pointer",fontSize:18,lineHeight:1}}>×</button>
-          </div>
-          <div style={{display:"grid",gap:5}}>
-            {GLOSSARY.map((g,i)=>(
-              <div key={i} style={{border:glossaryOpen===i?"1px solid rgba(201,168,76,0.45)":"1px solid rgba(201,168,76,0.12)",borderRadius:8,overflow:"hidden",background:glossaryOpen===i?"rgba(201,168,76,0.07)":"rgba(255,255,255,0.03)"}}>
-                <div onClick={()=>setGlossaryOpen(glossaryOpen===i?null:i)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",cursor:"pointer",userSelect:"none"}}>
-                  <span style={{fontSize:12,fontWeight:700,color:glossaryOpen===i?"#c9a84c":"#d4e8d4"}}>{g.term}</span>
-                  <span style={{fontSize:13,color:"#c9a84c",transition:"transform 0.2s",transform:glossaryOpen===i?"rotate(90deg)":"none",flexShrink:0}}>▶</span>
-                </div>
-                {glossaryOpen===i&&<div style={{padding:"0 12px 10px",paddingTop:8,color:"#a8c8b8",fontSize:12,lineHeight:1.75,borderTop:"1px solid rgba(201,168,76,0.12)"}}>{g.desc}</div>}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Stats row */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
@@ -1430,7 +1409,6 @@ export default function PokerTutor() {
   };
 
   if(screen==="coached") return <CoachMode onExit={()=>setScreen("menu")}/>;
-  if(screen==="glossary") return <GlossaryScreen onExit={()=>setScreen("menu")}/>;
   if(screen==="whatbeats") return <WhatBeatsWhat onExit={()=>setScreen("menu")}/>;
   if(screen==="comparison") return <HandComparisonLearn onExit={()=>setScreen("menu")}/>;
   if(screen==="math") return <MathMode onExit={()=>setScreen("menu")}/>;
@@ -1492,12 +1470,6 @@ export default function PokerTutor() {
           <div style={{fontSize:20,marginBottom:5}}>🎮</div>
           <div style={{fontWeight:700,fontSize:14,color:"#c9a84c",marginBottom:3}}>תרגול חופשי</div>
           <div style={{color:"#6a9a6a",fontSize:12}}>משחק נגד בוט עם הסברים — בלי לחץ</div>
-        </div>
-
-        <div style={{...S.panel,cursor:"pointer"}} onClick={()=>setScreen("glossary")}>
-          <div style={{fontSize:20,marginBottom:5}}>📖</div>
-          <div style={{fontWeight:700,fontSize:14,color:"#c9a84c",marginBottom:3}}>מילון מינוחים</div>
-          <div style={{color:"#6a9a6a",fontSize:12}}>כל מונחי הפוקר — לחץ לפתיחה, לחץ שוב לסגירה</div>
         </div>
       </div>
     </div>
