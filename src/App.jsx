@@ -1536,6 +1536,24 @@ ${ctx.drawFlush?"יש דרא לפלאש!":""}${ctx.drawStraight?"יש דרא ל�
           <div style={{fontSize:36,fontWeight:700,color:"#c9a84c",letterSpacing:8}}>{roomCode}</div>
         </div>
       )}
+      {playerNum===1 && (
+        <div style={{display:"flex",gap:8,justifyContent:"center",marginBottom:20,flexWrap:"wrap"}}>
+          <button onClick={()=>{
+            const url = `https://sivanrab-eng.github.io/PokerTuter/`;
+            const text = `🃏 בוא לשחק איתי פוקר!\n\nכנס לקישור, בחר "משחק לשניים — חי" → "הצטרף לחדר" והכנס את הקוד:\n\n*${roomCode}*\n\n${url}`;
+            window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+          }} style={{padding:"10px 18px",borderRadius:8,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:13,fontWeight:700,background:"#25D366",color:"#fff",display:"inline-flex",alignItems:"center",gap:6}}>
+            📱 שלח בוואטסאפ
+          </button>
+          <button onClick={()=>{
+            const text = `🃏 קוד החדר: ${roomCode}\nhttps://sivanrab-eng.github.io/PokerTuter/`;
+            if(navigator.share) navigator.share({text,title:"בוא לשחק פוקר!"});
+            else { navigator.clipboard.writeText(text); alert("הועתק ללוח!"); }
+          }} style={{padding:"10px 18px",borderRadius:8,border:"1px solid rgba(201,168,76,0.4)",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:13,fontWeight:700,background:"rgba(201,168,76,0.1)",color:"#c9a84c"}}>
+            📋 שתף / העתק
+          </button>
+        </div>
+      )}
       <div style={{fontSize:12,color:"#6a9a6a",animation:"pulse 2s infinite"}}>
         {playerNum===1?"ממתין לחיבור...":"מחכה שהמשחק יתחיל..."}
       </div>
