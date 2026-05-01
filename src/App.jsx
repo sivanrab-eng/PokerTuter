@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { db, ref, set, get, update, onValue, off } from "./firebase.js";
 
 // ─── Google Analytics GA4 ─────────────────────────────────────────
 const GA_ID = "G-535260447";
@@ -1302,6 +1303,425 @@ function MathMode({ onExit }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// TWO PLAYER MODE — Firebase multiplayer
+// ═══════════════════════════════════════════════════════════════════
+function genRoomCode() {
+  return Math.random().toString(36).substring(2,7).toUpperCase();
+}
+
+function TwoPlayerMode({ onExit }) {
+  const [phase, setPhase]         = useState("lobby"); // lobby | waiting | playing | private | showdown
+  const [roomCode, setRoomCode]   = useState("");
+  const [inputCode, setInputCode] = useState("");
+  const [playerNum, setPlayerNum] = useState(null); // 1 or 2
+  const [gameState, setGameState] = useState(null);
+  const [showPrivate, setShowPrivate] = useState(false);
+  const [aiMsg, setAiMsg]         = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [error, setError]         = useState("");
+  const [myAction, setMyAction]   = useState(null);
+
+  const myKey   = playerNum === 1 ? "p1" : "p2";
+  const oppKey  = playerNum === 1 ? "p2" : "p1";
+  const isMyTurn = gameState?.currentTurn === myKey;
+
+  // Subscribe to game state
+  useEffect(() => {
+    if(!roomCode) return;
+    const gameRef = ref(db, `games/${roomCode}`);
+    onValue(gameRef, snap => {
+      const data = snap.val();
+      if(data) {
+        setGameState(data);
+        if(data.stage === "waiting" && data.p1 && data.p2 && playerNum === 1) {
+          // Both joined — deal cards
+          dealGame(roomCode, data);
+        }
+        if(data.stage !== "waiting" && data.stage !== "lobby") {
+          setPhase("playing");
+        }
+      }
+    });
+    return () => off(gameRef);
+  }, [roomCode, playerNum]);
+
+  // Ask AI for private coaching
+  const getPrivateCoaching = async (hand, community, stage, pot, playerN) => {
+    setAiLoading(true);
+    try {
+      const ctx = analyzeContext(hand, community);
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          model:"claude-sonnet-4-20250514",
+          max_tokens:900,
+          system:`אתה מאמן פוקר אישי וסודי. אתה מדבר רק עם שחקן ${playerN} — היריב לא רואה את זה.
+עונה בעברית, שפה חמה וממוקדת. תשובה קצרה (3-4 משפטים).`,
+          messages:[{role:"user",content:`שחקן ${playerN} מחזיק ${hand.join(" ")}. לוח: ${community.join(" ")||"ריק עדיין"}.
+שלב: ${stage}. סיר: ${pot}. חוזק: ${ctx.current.name}. ${ctx.potential}.
+${ctx.drawFlush?"יש דרא לפלאש!":""}${ctx.drawStraight?"יש דרא לסטרייט!":""}
+תן ניתוח פרטי: מה חוזק הקלפים, מה צריך לקרות בלוח כדי לנצח, האם להמר חזק או להיזהר, וטיפ אחד חשוב.`}]
+        })
+      });
+      const data = await res.json();
+      setAiMsg(data.content?.find(b=>b.type==="text")?.text || "");
+    } catch {
+      setAiMsg("בדוק את הקלפים שלך ותחליט בחכמה! 🃏");
+    }
+    setAiLoading(false);
+  };
+
+  // Create room
+  const createRoom = async () => {
+    const code = genRoomCode();
+    setRoomCode(code);
+    setPlayerNum(1);
+    await set(ref(db, `games/${code}`), {
+      stage: "waiting",
+      pot: 40,
+      community: ["?","?","?","?","?"],
+      currentTurn: "p1",
+      p1: { chips:1000, bet:20, action:null, ready:false, hand:[] },
+      p2: null,
+      created: Date.now()
+    });
+    setPhase("waiting");
+  };
+
+  // Join room
+  const joinRoom = async () => {
+    const code = inputCode.trim().toUpperCase();
+    if(!code) return;
+    const snap = await get(ref(db, `games/${code}`));
+    if(!snap.exists()) { setError("חדר לא נמצא. בדקי את הקוד."); return; }
+    const data = snap.val();
+    if(data.p2) { setError("החדר כבר מלא."); return; }
+    setRoomCode(code);
+    setPlayerNum(2);
+    await update(ref(db, `games/${code}`), {
+      "p2/chips": 1000, "p2/bet": 20, "p2/action": null, "p2/ready": false, "p2/hand": []
+    });
+    setPhase("waiting");
+  };
+
+  // Deal cards (called by p1 when p2 joins)
+  const dealGame = async (code, existing) => {
+    if(existing.stage !== "waiting") return;
+    const deck = makeDeck();
+    const p1hand = [deck.pop(), deck.pop()];
+    const p2hand = [deck.pop(), deck.pop()];
+    const comm   = [deck.pop(), deck.pop(), deck.pop(), deck.pop(), deck.pop()];
+    await update(ref(db, `games/${code}`), {
+      stage: "preflop",
+      revealed: 0,
+      community: comm,
+      "p1/hand": p1hand,
+      "p2/hand": p2hand,
+    });
+  };
+
+  // Player action
+  const doAction = async (action) => {
+    if(!gameState || !isMyTurn) return;
+    setMyAction(action);
+    let newPot = gameState.pot;
+    if(action==="call")  newPot += 20;
+    if(action==="raise") newPot += 60;
+
+    if(action==="fold") {
+      await update(ref(db, `games/${roomCode}`), {
+        stage:"showdown", revealed:5,
+        [`${myKey}/action`]:"fold",
+        result: oppKey === "p1" ? "p1wins" : "p2wins",
+        pot: newPot,
+      });
+      return;
+    }
+
+    const stages = ["preflop","flop","turn","river","showdown"];
+    const si = stages.indexOf(gameState.stage);
+    const nextStage = stages[Math.min(si+1, 4)];
+    const newRevealed = nextStage==="flop"?3:nextStage==="turn"?4:5;
+
+    if(nextStage==="showdown") {
+      const p1Eval = evaluateHand([...gameState.p1.hand,...gameState.community]);
+      const p2Eval = evaluateHand([...gameState.p2.hand,...gameState.community]);
+      const result = p1Eval.score > p2Eval.score ? "p1wins" : p2Eval.score > p1Eval.score ? "p2wins" : "tie";
+      await update(ref(db, `games/${roomCode}`), {
+        stage:"showdown", revealed:5, pot:newPot,
+        [`${myKey}/action`]:action,
+        result, p1eval:p1Eval.name, p2eval:p2Eval.name,
+        currentTurn: oppKey,
+      });
+    } else {
+      await update(ref(db, `games/${roomCode}`), {
+        stage: nextStage, revealed: newRevealed, pot: newPot,
+        [`${myKey}/action`]: action,
+        currentTurn: oppKey,
+      });
+    }
+  };
+
+  const newRound = async () => {
+    setMyAction(null); setShowPrivate(false); setAiMsg("");
+    if(playerNum===1) await dealGame(roomCode, {...gameState, stage:"waiting"});
+    else await update(ref(db,`games/${roomCode}`),{stage:"waiting"});
+  };
+
+  // UI helpers
+  const S = {
+    app:{minHeight:"100vh",background:"radial-gradient(ellipse at 20% 10%,#0a1f12,#040c07 70%)",fontFamily:"Georgia,serif",color:"#d4e8d4",padding:"14px 14px 28px",direction:"rtl"},
+    panel:{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(201,168,76,0.22)",borderRadius:10,padding:"12px 14px",marginBottom:10},
+    btn:(v="gold")=>({padding:"12px 18px",borderRadius:8,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:14,fontWeight:700,
+      background:v==="gold"?"linear-gradient(135deg,#c9a84c,#8b6914)":v==="green"?"linear-gradient(135deg,#27ae60,#1e8449)":v==="red"?"linear-gradient(135deg,#c0392b,#922b21)":v==="blue"?"linear-gradient(135deg,#2980b9,#1a6090)":"rgba(255,255,255,0.07)",
+      color:v==="ghost"?"#8a9a8a":"#fff",border:v==="ghost"?"1px solid rgba(255,255,255,0.12)":"none",
+      boxShadow:v==="gold"?"0 3px 12px rgba(201,168,76,0.3)":"0 2px 6px rgba(0,0,0,0.3)"}),
+  };
+
+  const communityShow = gameState?.community?.slice(0, gameState?.revealed||0) || [];
+  const myHand = gameState?.[myKey]?.hand || [];
+  const oppHand = gameState?.[oppKey]?.hand || [];
+  const myChips = gameState?.[myKey]?.chips || 1000;
+  const oppChips = gameState?.[oppKey]?.chips || 1000;
+  const isShowdown = gameState?.stage === "showdown";
+
+  // ── LOBBY ─────────────────────────────────────────────────────────
+  if(phase==="lobby") return (
+    <div style={S.app}>
+      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}`}</style>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
+        <button style={S.btn("ghost")} onClick={onExit}>← חזרה</button>
+        <div style={{fontSize:18,fontWeight:700,color:"#c9a84c"}}>🃏 משחק לשניים</div>
+      </div>
+
+      <div style={{textAlign:"center",marginBottom:24}}>
+        <div style={{fontSize:40,marginBottom:10}}>👥</div>
+        <div style={{fontSize:14,color:"#a0c0a0",lineHeight:1.8}}>
+          שני שחקנים — שני מכשירים<br/>
+          כל אחד רואה את הקלפים שלו בלבד
+        </div>
+      </div>
+
+      <div style={{display:"grid",gap:12}}>
+        <button style={{...S.btn("gold"),fontSize:16,padding:16}} onClick={createRoom}>
+          ✨ צור חדר חדש
+        </button>
+
+        <div style={S.panel}>
+          <div style={{fontSize:13,color:"#c9a84c",fontWeight:700,marginBottom:8}}>הצטרף לחדר קיים</div>
+          <input value={inputCode} onChange={e=>setInputCode(e.target.value.toUpperCase())}
+            placeholder="הכנסי קוד חדר..."
+            style={{width:"100%",boxSizing:"border-box",padding:"10px 12px",borderRadius:8,border:"1px solid rgba(201,168,76,0.3)",background:"rgba(255,255,255,0.06)",color:"#d4e8d4",fontFamily:"Georgia,serif",fontSize:14,marginBottom:8,direction:"rtl",outline:"none",letterSpacing:3,textAlign:"center"}}
+          />
+          {error && <div style={{color:"#e74c3c",fontSize:12,marginBottom:8}}>{error}</div>}
+          <button style={{...S.btn("blue"),width:"100%"}} onClick={joinRoom}>הצטרף →</button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ── WAITING ───────────────────────────────────────────────────────
+  if(phase==="waiting") return (
+    <div style={{...S.app,textAlign:"center",paddingTop:60}}>
+      <div style={{fontSize:48,marginBottom:16}}>⏳</div>
+      <div style={{fontSize:20,fontWeight:700,color:"#c9a84c",marginBottom:8}}>
+        {playerNum===1 ? "ממתין לשחקן 2..." : "ממתין לדילר..."}
+      </div>
+      <div style={{fontSize:14,color:"#6a9a6a",marginBottom:24}}>
+        {playerNum===1 ? "שלח את הקוד לחבר שלך:" : "מתחבר לחדר..."}
+      </div>
+      {playerNum===1 && (
+        <div style={{background:"rgba(201,168,76,0.12)",border:"2px solid #c9a84c",borderRadius:16,padding:"20px 40px",display:"inline-block",marginBottom:24}}>
+          <div style={{fontSize:36,fontWeight:700,color:"#c9a84c",letterSpacing:8}}>{roomCode}</div>
+        </div>
+      )}
+      <div style={{fontSize:12,color:"#6a9a6a",animation:"pulse 2s infinite"}}>
+        {playerNum===1?"ממתין לחיבור...":"מחכה שהמשחק יתחיל..."}
+      </div>
+      <button style={{...S.btn("ghost"),marginTop:30}} onClick={onExit}>← ביטול</button>
+    </div>
+  );
+
+  // ── PRIVATE SCREEN ────────────────────────────────────────────────
+  if(phase==="playing" && showPrivate) {
+    const ctx = myHand.length ? analyzeContext(myHand, communityShow) : null;
+    return (
+      <div style={S.app}>
+        <style>{`@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}`}</style>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+          <div style={{fontSize:13,fontWeight:700,color:"#c9a84c"}}>🔒 מסך פרטי — שחקן {playerNum}</div>
+          <button style={S.btn("ghost")} onClick={()=>setShowPrivate(false)}>× סגור</button>
+        </div>
+
+        {/* My cards */}
+        <div style={{...S.panel,border:"1px solid rgba(201,168,76,0.5)"}}>
+          <div style={{fontSize:11,color:"#c9a84c",marginBottom:8}}>✋ הקלפים שלך (רק אתה רואה)</div>
+          <div style={{display:"flex",gap:6,marginBottom:10}}>
+            {myHand.map((c,i)=><Card key={i} str={c} highlight/>)}
+          </div>
+          {ctx && <>
+            <StrengthBar value={ctx.strength} label={ctx.current.name}/>
+            <div style={{fontSize:12,color:"#a0c0a0",marginTop:5}}>{ctx.potential}</div>
+            <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:6}}>
+              {ctx.drawFlush&&<Tag emoji="🃏" text="דרא לפלאש" color="#9b59b6"/>}
+              {ctx.drawStraight&&<Tag emoji="↔️" text="דרא לסטרייט" color="#3498db"/>}
+              {ctx.pairs.length>0&&<Tag emoji="👫" text={`${ctx.pairs.length} זוג`} color="#27ae60"/>}
+              {ctx.highCards.length>0&&<Tag emoji="👑" text={ctx.highCards.slice(0,2).join(",")} color="#c9a84c"/>}
+            </div>
+          </>}
+        </div>
+
+        {/* What needs to happen to win */}
+        {ctx && (
+          <div style={{...S.panel,border:"1px solid rgba(52,152,219,0.35)"}}>
+            <div style={{fontSize:11,color:"#3498db",fontWeight:700,marginBottom:6}}>🎯 מה צריך לקרות בשביל לנצח</div>
+            <div style={{fontSize:12,color:"#a8c8e8",lineHeight:1.75}}>
+              {ctx.current.score>=5 && "יד חזקה מאוד! אל תחשפי אותה מוקדם — המשך להמר בחוזק."}
+              {ctx.current.score===4 && "סטרייט יפה. שים לב לאפשרות שליריב יש פלאש — אם הלוח חד-צבעוני, היזהר."}
+              {ctx.current.score===3 && "שלישייה טובה! אם יצא עוד קלף דומה — פול האוס! שים לב לריבר."}
+              {ctx.current.score===2 && "שני זוגות — יד בינונית-טובה. אם הלוח לא מסוכן, כדאי להמר."}
+              {ctx.current.score===1 && "זוג — תלוי כמה הזוג גבוה. אם זוג אסים/קינגים — המר. אחרת — היזהר."}
+              {ctx.current.score===0 && ctx.drawFlush && "חסר קלף אחד לפלאש — יש ~35% סיכוי. אם הסיר גדול — שווה להמשיך."}
+              {ctx.current.score===0 && ctx.drawStraight && "חסר קלף לסטרייט — ~32% (OESD) או ~16% (גאטשוט). שקול לפי גודל הסיר."}
+              {ctx.current.score===0 && !ctx.drawFlush && !ctx.drawStraight && ctx.highCards.length>0 && `קלף גבוה בלבד (${ctx.highCards[0]}). שקול בלוף אם אתה ראשון להמר, אחרת — פולד.`}
+              {ctx.current.score===0 && !ctx.drawFlush && !ctx.drawStraight && ctx.highCards.length===0 && "יד חלשה. שקול לפולד אלא אם כן אתה בטוח שהיריב חלש יותר."}
+            </div>
+          </div>
+        )}
+
+        {/* AI coaching */}
+        <div style={S.panel}>
+          <div style={{fontSize:11,color:"#c9a84c",fontWeight:700,marginBottom:6}}>🎩 ייעוץ אישי מהמאמן</div>
+          {aiLoading
+            ? <div style={{display:"flex",gap:4}}>{[0,1,2].map(i=><div key={i} style={{width:6,height:6,borderRadius:"50%",background:"#c9a84c",animation:"bounce 1.2s infinite",animationDelay:`${i*0.2}s`}}/>)}</div>
+            : aiMsg
+              ? <div style={{fontSize:12,color:"#d4e8d4",lineHeight:1.8}}>{aiMsg}</div>
+              : <button style={{...S.btn("blue"),width:"100%",fontSize:12}} onClick={()=>getPrivateCoaching(myHand,communityShow,gameState?.stage,gameState?.pot,playerNum)}>
+                  🤖 קבל ייעוץ אישי →
+                </button>
+          }
+        </div>
+
+        <button style={{...S.btn("gold"),width:"100%",padding:14}} onClick={()=>setShowPrivate(false)}>
+          ✅ סיימתי לעיין — חזור למשחק
+        </button>
+      </div>
+    );
+  }
+
+  // ── MAIN GAME SCREEN ──────────────────────────────────────────────
+  const myResult = gameState?.result;
+  const iWon = myResult===(myKey==="p1"?"p1wins":"p2wins");
+  const iLost = myResult===(myKey==="p1"?"p2wins":"p1wins");
+
+  return (
+    <div style={S.app}>
+      <style>{`@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}} @keyframes slideIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}`}</style>
+
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+        <button style={S.btn("ghost")} onClick={onExit}>← יציאה</button>
+        <div style={{fontSize:13,fontWeight:700,color:"#c9a84c"}}>🃏 שחקן {playerNum}</div>
+        <div style={{fontSize:10,color:"#6a9a6a"}}>#{roomCode}</div>
+      </div>
+
+      {/* Chips + Pot */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+        <div style={{fontSize:11,color:"#c9a84c",fontWeight:700}}>💰 {myChips}</div>
+        <div style={{background:"rgba(201,168,76,0.14)",border:"1px solid rgba(201,168,76,0.3)",borderRadius:18,padding:"3px 14px",fontSize:12,color:"#c9a84c",fontWeight:700}}>
+          סיר {gameState?.pot||0}
+        </div>
+        <div style={{fontSize:11,color:"#6a9a6a",fontWeight:700}}>👤 {oppChips}</div>
+      </div>
+
+      {/* Stage */}
+      <div style={{display:"flex",gap:2,marginBottom:10}}>
+        {["פרה-פלופ","פלופ","טרן","ריבר"].map((n,i)=>{
+          const si = ["preflop","flop","turn","river","showdown"].indexOf(gameState?.stage||"preflop");
+          return <div key={n} style={{flex:1,height:4,borderRadius:2,background:i<si?"#c9a84c":i===si?"rgba(201,168,76,0.55)":"rgba(255,255,255,0.07)"}}/>;
+        })}
+      </div>
+
+      {/* Opponent */}
+      <div style={S.panel}>
+        <div style={{fontSize:10,color:"#6a9a6a",marginBottom:6}}>👤 יריב (שחקן {playerNum===1?2:1})</div>
+        <div style={{display:"flex",gap:4}}>
+          {isShowdown && oppHand.length
+            ? oppHand.map((c,i)=><Card key={i} str={c} small/>)
+            : [0,1].map(i=><Card key={i} str="X♠" hidden small/>)
+          }
+          {isShowdown && gameState?.[oppKey+"eval"] && (
+            <span style={{fontSize:11,color:"#6a9a6a",marginRight:8,alignSelf:"center"}}>{gameState[oppKey+"eval"]}</span>
+          )}
+        </div>
+      </div>
+
+      {/* Community */}
+      <div style={S.panel}>
+        <div style={{fontSize:10,color:"#6a9a6a",marginBottom:8}}>🂠 לוח — {STAGE_NAMES[gameState?.stage||"preflop"]}</div>
+        <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+          {communityShow.map((c,i)=><Card key={i} str={c}/>)}
+          {Array(5-communityShow.length).fill(null).map((_,i)=>(
+            <div key={i} style={{width:60,height:86,borderRadius:8,border:"2px dashed rgba(201,168,76,0.12)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <span style={{color:"rgba(201,168,76,0.12)",fontSize:14}}>?</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* My cards — hidden by default */}
+      <div style={{...S.panel,border:"1px solid rgba(201,168,76,0.4)",marginBottom:10}}>
+        <div style={{fontSize:10,color:"#c9a84c",marginBottom:8}}>✋ הקלפים שלך</div>
+        <div style={{display:"flex",gap:5,alignItems:"center"}}>
+          <div style={{display:"flex",gap:4}}>
+            {myHand.map((c,i)=><Card key={i} str={c} highlight/>)}
+          </div>
+          <button onClick={()=>{setShowPrivate(true);if(!aiMsg&&myHand.length)getPrivateCoaching(myHand,communityShow,gameState?.stage,gameState?.pot,playerNum);}}
+            style={{...S.btn("blue"),fontSize:11,padding:"8px 12px",marginRight:"auto"}}>
+            🔍 ניתוח פרטי
+          </button>
+        </div>
+        {myHand.length>0 && (()=>{
+          const ctx = analyzeContext(myHand, communityShow);
+          return <div style={{fontSize:11,color:"#a0c0a0",marginTop:6}}>{ctx.current.name} · {ctx.potential}</div>;
+        })()}
+      </div>
+
+      {/* Turn indicator */}
+      <div style={{textAlign:"center",marginBottom:10,fontSize:13,fontWeight:700,color:isMyTurn?"#27ae60":"#f39c12"}}>
+        {isShowdown ? "" : isMyTurn ? "🟢 התור שלך!" : "🟡 ממתין ליריב..."}
+      </div>
+
+      {/* Result */}
+      {isShowdown && myResult && (
+        <div style={{background:iWon?"rgba(39,174,96,0.2)":iLost?"rgba(192,57,43,0.2)":"rgba(201,168,76,0.15)",border:`1px solid ${iWon?"#27ae60":iLost?"#e74c3c":"#c9a84c"}`,borderRadius:10,padding:"12px",textAlign:"center",marginBottom:10,animation:"slideIn 0.4s ease"}}>
+          <div style={{fontSize:28,marginBottom:4}}>{iWon?"🏆":iLost?"💸":"🤝"}</div>
+          <div style={{fontWeight:700,fontSize:16,color:"#fff"}}>{iWon?"ניצחת!":iLost?"הפסדת":myResult==="tie"?"תיקו!":""}</div>
+          {gameState?.p1eval&&<div style={{fontSize:11,color:"#a0c0a0",marginTop:4}}>ש׳1: {gameState.p1eval} · ש׳2: {gameState.p2eval}</div>}
+        </div>
+      )}
+
+      {/* Actions */}
+      {!isShowdown ? (
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+          {[{a:"call",l:"✅ קול",v:"green"},{a:"raise",l:"📈 ריייז",v:"blue"},{a:"fold",l:"❌ פולד",v:"red"}].map(({a,l,v})=>(
+            <button key={a} disabled={!isMyTurn} onClick={()=>doAction(a)}
+              style={{...S.btn(v),opacity:isMyTurn?1:0.4,cursor:isMyTurn?"pointer":"not-allowed"}}>
+              {l}
+            </button>
+          ))}
+        </div>
+      ):(
+        <button style={{...S.btn("gold"),width:"100%",padding:14}} onClick={newRound}>
+          🔄 סיבוב חדש
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // MAIN APP
 // ═══════════════════════════════════════════════════════════════════
 export default function PokerTutor() {
@@ -1380,6 +1800,7 @@ export default function PokerTutor() {
   if(screen==="whatbeats") return <WhatBeatsWhat onExit={()=>setScreen("menu")}/>;
   if(screen==="comparison") return <HandComparisonLearn onExit={()=>setScreen("menu")}/>;
   if(screen==="math") return <MathMode onExit={()=>setScreen("menu")}/>;
+  if(screen==="twoplayer") return <TwoPlayerMode onExit={()=>setScreen("menu")}/>;
 
   if(screen==="menu") return(
     <div style={S.app}>
@@ -1438,6 +1859,12 @@ export default function PokerTutor() {
           <div style={{fontSize:20,marginBottom:5}}>🎮</div>
           <div style={{fontWeight:700,fontSize:14,color:"#c9a84c",marginBottom:3}}>תרגול חופשי</div>
           <div style={{color:"#6a9a6a",fontSize:12}}>משחק נגד בוט עם הסברים — בלי לחץ</div>
+        </div>
+
+        <div style={{...S.panel,cursor:"pointer",borderColor:"rgba(155,89,182,0.5)",background:"rgba(155,89,182,0.07)"}} onClick={()=>setScreen("twoplayer")}>
+          <div style={{fontSize:20,marginBottom:5}}>👥</div>
+          <div style={{fontWeight:700,fontSize:14,color:"#9b59b6",marginBottom:3}}>משחק לשניים — חי!</div>
+          <div style={{color:"#6a9a6a",fontSize:12}}>שני מכשירים · ניתוח פרטי לכל שחקן · בזמן אמת</div>
         </div>
       </div>
     </div>
