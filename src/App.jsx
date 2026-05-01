@@ -1541,7 +1541,11 @@ ${ctx.drawFlush?"יש דרא לפלאש!":""}${ctx.drawStraight?"יש דרא ל�
           <button onClick={()=>{
             const url = `https://sivanrab-eng.github.io/PokerTuter/`;
             const text = `🃏 בוא לשחק איתי פוקר!\n\nכנס לקישור, בחר "משחק לשניים — חי" → "הצטרף לחדר" והכנס את הקוד:\n\n*${roomCode}*\n\n${url}`;
-            window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+            const link = document.createElement('a');
+            link.href = `https://wa.me/?text=${encodeURIComponent(text)}`;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.click();
           }} style={{padding:"10px 18px",borderRadius:8,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:13,fontWeight:700,background:"#25D366",color:"#fff",display:"inline-flex",alignItems:"center",gap:6}}>
             📱 שלח בוואטסאפ
           </button>
