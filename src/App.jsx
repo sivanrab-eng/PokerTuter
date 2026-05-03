@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { db, ref, set, get, update, onValue, off } from "./firebase.js";
 
 // ─── Google Analytics GA4 ─────────────────────────────────────────
-const GA_ID = "G-535260447";
+const GA_ID = "G-W9BL62BYLE";
 
 function initGA() {
   if(typeof window === "undefined") return;
