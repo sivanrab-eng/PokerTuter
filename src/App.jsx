@@ -1831,6 +1831,33 @@ export default function PokerTutor() {
         <div style={{fontSize:40,marginBottom:8}}>🃏</div>
         <div style={S.title}>מאסטר פוקר</div>
         <div style={{fontSize:11,color:"#6a9a6a",letterSpacing:1,marginTop:4}}>ללמוד טקסס הולדם מאפס</div>
+
+        {/* Share + Install buttons */}
+        <div style={{display:"flex",gap:8,justifyContent:"center",marginTop:12}}>
+          <button onClick={()=>{
+            const url = "https://sivanrab-eng.github.io/PokerTuter/";
+            const text = "🃏 מאסטר פוקר — לומדים פוקר מאפס!";
+            if(navigator.share) {
+              navigator.share({title:text, url});
+            } else {
+              const a = document.createElement('a');
+              a.href = `https://wa.me/?text=${encodeURIComponent(text+"\n"+url)}`;
+              a.target = "_blank"; a.rel="noopener noreferrer"; a.click();
+            }
+          }} style={{padding:"8px 16px",borderRadius:8,border:"1px solid rgba(201,168,76,0.4)",background:"rgba(201,168,76,0.1)",color:"#c9a84c",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:12,fontWeight:700}}>
+            📤 שתף
+          </button>
+          <button id="pwa-install-btn" onClick={()=>{
+            if(window.__pwaPrompt) {
+              window.__pwaPrompt.prompt();
+              window.__pwaPrompt.userChoice.then(()=>{ window.__pwaPrompt=null; document.getElementById('pwa-install-btn').style.display='none'; });
+            } else {
+              alert("כדי להוסיף לדף הבית:\nלחצי על תפריט הדפדפן (⋮) → הוסף למסך הבית");
+            }
+          }} style={{padding:"8px 16px",borderRadius:8,border:"1px solid rgba(39,174,96,0.4)",background:"rgba(39,174,96,0.1)",color:"#27ae60",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:12,fontWeight:700}}>
+            📲 שמור למסך הבית
+          </button>
+        </div>
       </div>
       <TeacherBubble message={aiMsg} loading={aiLoading}/>
       <div style={{display:"grid",gap:10}}>
