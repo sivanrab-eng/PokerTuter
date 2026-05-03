@@ -424,6 +424,7 @@ function CoachMode({ onExit }) {
   const [roundNum, setRoundNum] = useState(1);
   const [showGlossary, setShowGlossary] = useState(false);
   const [glossaryOpen, setGlossaryOpen] = useState(null);
+  const [stageTooltip, setStageTooltip] = useState(null);
 
   const CONCEPTS = [
     { key:"pot-odds", label:"Pot Odds", emoji:"🎲", prompt: (ph, bh, comm) =>
@@ -564,15 +565,27 @@ ${picked?picked.prompt(gs.playerHand,gs.botHand,comm):""}
         <div style={{fontSize:10,color:"#6a9a6a"}}>סיבוב {roundNum}</div>
       </div>
 
-      {/* Stage track */}
+      {/* Stage track — labels are tappable */}
       <div style={{display:"flex",gap:2,marginBottom:4}}>
-        {["פרה-פלופ","פלופ","טרן","ריבר"].map((n,i)=>(
-          <div key={n} style={{flex:1}}>
+        {[
+          {n:"פרה-פלופ", key:"פרה-פלופ"},
+          {n:"פלופ",     key:"פלופ"},
+          {n:"טרן",      key:"טרן"},
+          {n:"ריבר",     key:"ריבר"},
+        ].map(({n,key},i)=>(
+          <div key={n} style={{flex:1,cursor:"pointer"}} onClick={()=>setStageTooltip(stageTooltip===key?null:key)}>
             <div style={{height:3,borderRadius:2,background:i<stageIdx?"#c9a84c":i===stageIdx?"rgba(201,168,76,0.55)":"rgba(255,255,255,0.07)"}}/>
-            <div style={{fontSize:8,color:i<=stageIdx?"#c9a84c":"#333",textAlign:"center",marginTop:1}}>{n}</div>
+            <div style={{fontSize:8,color:i<=stageIdx?"#c9a84c":"#555",textAlign:"center",marginTop:1,borderBottom:stageTooltip===key?"1px dashed #f0c040":"none"}}>{n}</div>
           </div>
         ))}
       </div>
+      {stageTooltip && TERM_DEFS[stageTooltip] && (
+        <div style={{background:"rgba(10,30,15,0.97)",border:"1px solid rgba(240,192,64,0.45)",borderRadius:8,padding:"9px 12px",marginBottom:6,fontSize:11,direction:"rtl",animation:"slideIn 0.2s ease"}}>
+          <div style={{color:"#d4e8d4",marginBottom:5}}>{TERM_DEFS[stageTooltip].generic}</div>
+          <div style={{color:"#f0c040",borderTop:"1px solid rgba(240,192,64,0.2)",paddingTop:5}}>✦ {TERM_DEFS[stageTooltip].specific(gCtx)}</div>
+          <div onClick={()=>setStageTooltip(null)} style={{textAlign:"center",color:"#6a9a6a",fontSize:10,marginTop:6,cursor:"pointer"}}>סגור ×</div>
+        </div>
+      )}
 
       {/* Concept + Coach bubble */}
       <div style={{background:"linear-gradient(135deg,rgba(22,62,36,0.93),rgba(12,35,20,0.96))",border:"1px solid #c9a84c",borderRadius:10,padding:"8px 12px",marginBottom:5,display:"flex",gap:8,alignItems:"flex-start"}}>
