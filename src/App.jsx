@@ -1758,6 +1758,7 @@ export default function PokerTutor() {
   const [pot, setPot] = useState(0);
   const [playerChips, setPlayerChips] = useState(1000);
   const [botChips, setBotChips] = useState(1000);
+  const [activeModal, setActiveModal] = useState(null);
 
   const ask = (prompt) => callClaude(prompt, setAiMsg, setAiLoading);
 
@@ -1891,8 +1892,6 @@ export default function PokerTutor() {
       ]},
   };
 
-  const [activeModal, setActiveModal] = useState(null);
-
   const openModal = (e, key) => { e.stopPropagation(); setActiveModal(key); };
   const goTo = (key) => { setActiveModal(null); if(key==="lessonList"){setScreen("lessonList");ask("ברכת פתיחה קצרה");}else if(key==="handRankings"){setScreen("handRankings");ask("מה הכי חשוב לדעת על דירוג ידיים?");}else if(key==="practice"){startPractice();}else setScreen(key); };
 
@@ -1912,9 +1911,8 @@ export default function PokerTutor() {
   );
 
   if(screen==="menu") return(
-    <div style={{...S.app,minHeight:"100vh",padding:"12px 14px 16px"}}>
+    <div style={{height:"100vh",overflow:"hidden",background:"radial-gradient(ellipse at 30% 20%,#0d3320,#061a0e 40%,#030d07 100%)",fontFamily:"Georgia,serif",color:"#d4e8d4",padding:"10px 14px",direction:"rtl",boxSizing:"border-box"}}>
       <style>{`
-        @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
         @keyframes fadeIn{from{opacity:0}to{opacity:1}}
         @keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
       `}</style>
