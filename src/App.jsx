@@ -1897,24 +1897,22 @@ export default function PokerTutor() {
   const goTo = (key) => { setActiveModal(null); if(key==="lessonList"){setScreen("lessonList");ask("ברכת פתיחה קצרה");}else if(key==="handRankings"){setScreen("handRankings");ask("מה הכי חשוב לדעת על דירוג ידיים?");}else if(key==="practice"){startPractice();}else setScreen(key); };
 
   const MenuCard = ({id, icon, title, subtitle, color="#c9a84c", accent, fullWidth=false}) => (
-    <div style={{background:`rgba(255,255,255,0.04)`,border:`1px solid ${accent||"rgba(201,168,76,0.22)"}`,borderRadius:10,padding:"11px 13px",cursor:"pointer",position:"relative",gridColumn:fullWidth?"1/-1":"auto"}}
+    <div style={{background:"rgba(255,255,255,0.04)",border:`1px solid ${accent||"rgba(201,168,76,0.22)"}`,borderRadius:10,padding:"9px 11px",cursor:"pointer",position:"relative",gridColumn:fullWidth?"1/-1":"auto",display:"flex",alignItems:"center",gap:10}}
       onClick={()=>goTo(id)}>
-      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
-        <div style={{flex:1}}>
-          <div style={{fontSize:fullWidth?20:18,marginBottom:4}}>{icon}</div>
-          <div style={{fontWeight:700,fontSize:fullWidth?14:13,color,marginBottom:3}}>{title}</div>
-          <div style={{color:"#6a9a6a",fontSize:11,lineHeight:1.4}}>{subtitle}</div>
-        </div>
-        <button onClick={(e)=>openModal(e,id)}
-          style={{width:24,height:24,borderRadius:"50%",border:"1px solid rgba(201,168,76,0.35)",background:"rgba(201,168,76,0.1)",color:"#c9a84c",cursor:"pointer",fontSize:13,fontWeight:700,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Georgia,serif"}}>
-          ?
-        </button>
+      <div style={{fontSize:fullWidth?18:16,flexShrink:0}}>{icon}</div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontWeight:700,fontSize:12,color,marginBottom:1}}>{title}</div>
+        <div style={{color:"#6a9a6a",fontSize:10,lineHeight:1.3}}>{subtitle}</div>
       </div>
+      <button onClick={(e)=>{e.stopPropagation();openModal(e,id);}}
+        style={{width:22,height:22,borderRadius:"50%",border:"1px solid rgba(201,168,76,0.35)",background:"rgba(201,168,76,0.1)",color:"#c9a84c",cursor:"pointer",fontSize:12,fontWeight:700,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Georgia,serif",zIndex:1}}>
+        ?
+      </button>
     </div>
   );
 
   if(screen==="menu") return(
-    <div style={S.app}>
+    <div style={{...S.app,minHeight:"100vh",padding:"12px 14px 16px"}}>
       <style>{`
         @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
         @keyframes fadeIn{from{opacity:0}to{opacity:1}}
@@ -1923,63 +1921,63 @@ export default function PokerTutor() {
 
       {/* Modal */}
       {activeModal && (
-        <div onClick={()=>setActiveModal(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",backdropFilter:"blur(6px)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:20,animation:"fadeIn 0.2s ease"}}>
-          <div onClick={e=>e.stopPropagation()} style={{background:"rgba(10,30,15,0.97)",border:"1px solid rgba(201,168,76,0.5)",borderRadius:16,padding:"20px",maxWidth:360,width:"100%",animation:"slideUp 0.25s ease",direction:"rtl"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-              <div style={{fontSize:15,fontWeight:700,color:"#c9a84c"}}>{CARD_MODALS[activeModal]?.title}</div>
+        <div onClick={()=>setActiveModal(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",backdropFilter:"blur(6px)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:20,animation:"fadeIn 0.2s ease"}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"rgba(10,30,15,0.97)",border:"1px solid rgba(201,168,76,0.5)",borderRadius:16,padding:"18px",maxWidth:360,width:"100%",animation:"slideUp 0.25s ease",direction:"rtl"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+              <div style={{fontSize:14,fontWeight:700,color:"#c9a84c"}}>{CARD_MODALS[activeModal]?.title}</div>
               <button onClick={()=>setActiveModal(null)} style={{background:"none",border:"none",color:"#6a9a6a",cursor:"pointer",fontSize:20,lineHeight:1,padding:4}}>×</button>
             </div>
-            <div style={{display:"grid",gap:10}}>
+            <div style={{display:"grid",gap:8}}>
               {CARD_MODALS[activeModal]?.items.map((item,i)=>(
-                <div key={i} style={{fontSize:13,lineHeight:1.7,color:"#c8dcc8"}}>
+                <div key={i} style={{fontSize:12,lineHeight:1.65,color:"#c8dcc8"}}>
                   <span style={{color:"#c9a84c",fontWeight:700}}>{item.b} </span>{item.t}
                 </div>
               ))}
             </div>
-            <button onClick={()=>goTo(activeModal)} style={{marginTop:16,width:"100%",padding:"11px",borderRadius:9,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:14,fontWeight:700,background:"linear-gradient(135deg,#c9a84c,#8b6914)",color:"#1a1a1a"}}>
+            <button onClick={()=>goTo(activeModal)} style={{marginTop:14,width:"100%",padding:"11px",borderRadius:9,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:14,fontWeight:700,background:"linear-gradient(135deg,#c9a84c,#8b6914)",color:"#1a1a1a"}}>
               בוא נתחיל ←
             </button>
           </div>
         </div>
       )}
 
-      {/* Header */}
-      <div style={{textAlign:"center",marginBottom:16}}>
-        <div style={{fontSize:36,marginBottom:6}}>🃏</div>
-        <div style={S.title}>מאסטר פוקר</div>
-        <div style={{display:"flex",gap:8,justifyContent:"center",marginTop:10}}>
-          <button onClick={()=>{ const url="https://sivanrab-eng.github.io/PokerTuter/"; if(navigator.share){navigator.share({title:"מאסטר פוקר",url});}else{const a=document.createElement('a');a.href=`https://wa.me/?text=${encodeURIComponent("🃏 מאסטר פוקר — לומדים פוקר מאפס!\n"+url)}`;a.target="_blank";a.rel="noopener noreferrer";a.click();} }}
-            style={{padding:"7px 14px",borderRadius:8,border:"1px solid rgba(201,168,76,0.4)",background:"rgba(201,168,76,0.08)",color:"#c9a84c",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:11,fontWeight:700}}>
+      {/* Header — compact */}
+      <div style={{textAlign:"center",marginBottom:10}}>
+        <div style={{fontSize:28,marginBottom:4}}>🃏</div>
+        <div style={{...S.title,fontSize:20}}>מאסטר פוקר</div>
+        <div style={{display:"flex",gap:6,justifyContent:"center",marginTop:8}}>
+          <button onClick={()=>{ const url="https://sivanrab-eng.github.io/PokerTuter/"; if(navigator.share){navigator.share({title:"מאסטר פוקר",url});}else{const a=document.createElement('a');a.href=`https://wa.me/?text=${encodeURIComponent("🃏 מאסטר פוקר\n"+url)}`;a.target="_blank";a.rel="noopener noreferrer";a.click();} }}
+            style={{padding:"5px 12px",borderRadius:7,border:"1px solid rgba(201,168,76,0.4)",background:"rgba(201,168,76,0.08)",color:"#c9a84c",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:11,fontWeight:700}}>
             📤 שתף
           </button>
-          <button onClick={()=>{ if(window.__pwaPrompt){window.__pwaPrompt.prompt();}else{alert("כדי להוסיף לדף הבית:\nתפריט הדפדפן (⋮) → הוסף למסך הבית");} }}
-            style={{padding:"7px 14px",borderRadius:8,border:"1px solid rgba(39,174,96,0.4)",background:"rgba(39,174,96,0.08)",color:"#27ae60",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:11,fontWeight:700}}>
+          <button onClick={()=>{ if(window.__pwaPrompt){window.__pwaPrompt.prompt();}else{alert("תפריט הדפדפן (⋮) ← הוסף למסך הבית");} }}
+            style={{padding:"5px 12px",borderRadius:7,border:"1px solid rgba(39,174,96,0.4)",background:"rgba(39,174,96,0.08)",color:"#27ae60",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:11,fontWeight:700}}>
             📲 שמור
           </button>
         </div>
       </div>
 
-      {/* Section 1: תיאוריה ולמידה */}
-      <div style={{fontSize:10,color:"#6a9a6a",letterSpacing:2,marginBottom:7,paddingRight:2}}>תיאוריה ולמידה</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
-        <MenuCard id="coached" icon="🎓" title="לומד תוך כדי משחק" subtitle="ניתוח חכם + הסברים בזמן אמת" accent="rgba(201,168,76,0.5)" fullWidth/>
+      {/* Section 1: תיאוריה ולמידה — שיעורים+דירוג למעלה, לומד תוך כדי מתחת */}
+      <div style={{fontSize:9,color:"#6a9a6a",letterSpacing:2,marginBottom:5,paddingRight:2}}>תיאוריה ולמידה</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
         <MenuCard id="lessons" icon="📚" title="שיעורים" subtitle="4 שיעורים מדורגים"/>
         <MenuCard id="handRankings" icon="🏆" title="דירוג הידיים" subtitle="כל 9 הקומבינציות"/>
+        <MenuCard id="coached" icon="🎓" title="לומד תוך כדי משחק" subtitle="ניתוח חכם + הסברים בזמן אמת" accent="rgba(201,168,76,0.5)" fullWidth/>
       </div>
 
       {/* Section 2: תרגול מעשי */}
-      <div style={{fontSize:10,color:"#6a9a6a",letterSpacing:2,marginBottom:7,paddingRight:2}}>תרגול מעשי</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
+      <div style={{fontSize:9,color:"#6a9a6a",letterSpacing:2,marginBottom:5,paddingRight:2}}>תרגול מעשי</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
         <MenuCard id="comparison" icon="🥊" title="מי מנצח?" subtitle="קל לקשה" color="#27ae60" accent="rgba(39,174,96,0.3)"/>
         <MenuCard id="whatbeats" icon="⚔️" title="מה לוקח מה?" subtitle="ויזואלי + קלפים"/>
         <MenuCard id="math" icon="🧮" title="הסתברות פוקר" subtitle="אאוטס · כלל ה-4 · Pot Odds" color="#3498db" accent="rgba(52,152,219,0.3)" fullWidth/>
       </div>
 
       {/* Section 3: משחק */}
-      <div style={{fontSize:10,color:"#6a9a6a",letterSpacing:2,marginBottom:7,paddingRight:2}}>משחק</div>
-      <div style={{display:"grid",gap:8}}>
+      <div style={{fontSize:9,color:"#6a9a6a",letterSpacing:2,marginBottom:5,paddingRight:2}}>משחק</div>
+      <div style={{display:"grid",gap:6}}>
         <MenuCard id="practice" icon="🎮" title="תרגול חופשי" subtitle="נגד בוט · בלי לחץ" fullWidth/>
-        <MenuCard id="twoplayer" icon="👥" title="משחק לשניים — חי!" subtitle="שני מכשירים · Firebase · בזמן אמת" color="#9b59b6" accent="rgba(155,89,182,0.4)" fullWidth/>
+        <MenuCard id="twoplayer" icon="👥" title="משחק לשניים — חי!" subtitle="שני מכשירים · בזמן אמת" color="#9b59b6" accent="rgba(155,89,182,0.4)" fullWidth/>
       </div>
     </div>
   );
