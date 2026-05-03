@@ -1762,6 +1762,21 @@ export default function PokerTutor() {
 
   const ask = (prompt) => callClaude(prompt, setAiMsg, setAiLoading);
 
+  // Browser back button support
+  useEffect(() => {
+    const handlePop = () => {
+      setScreen("menu");
+      setActiveModal(null);
+    };
+    window.addEventListener("popstate", handlePop);
+    return () => window.removeEventListener("popstate", handlePop);
+  }, []);
+
+  const navigateTo = (newScreen) => {
+    history.pushState({ screen: newScreen }, "", "");
+    setScreen(newScreen);
+  };
+
   // GA init + screen tracking
   useEffect(() => { initGA(); }, []);
   useEffect(() => { trackEvent("screen_view", { screen_name: screen }); }, [screen]);
@@ -1777,7 +1792,7 @@ export default function PokerTutor() {
       content:<div style={{direction:"rtl",color:"#d4e8d4"}}>{[{a:"✅ צ'ק",d:"המשך בלי להמר",c:"#27ae60"},{a:"🃏 קול",d:"השווה להימור הקיים",c:"#2980b9"},{a:"📈 ריייז",d:"העלה את ההימור",c:"#f39c12"},{a:"❌ פולד",d:"וותר — חסוך הפסד גדול יותר",c:"#e74c3c"}].map(item=><div key={item.a} style={{background:"rgba(255,255,255,0.04)",border:`1px solid ${item.c}40`,borderRadius:8,padding:"8px 12px",display:"flex",gap:10,alignItems:"center",marginBottom:8}}><span style={{fontWeight:700,color:item.c,minWidth:80,fontSize:12}}>{item.a}</span><span style={{color:"#a0b0a0",fontSize:12}}>{item.d}</span></div>)}</div>},
   ];
 
-  const startLesson = (i) => { setLesson(i); setScreen("lessons"); ask(LESSONS[i].prompt); trackEvent("lesson_start", { lesson_index: i, lesson_title: LESSONS[i].title }); };
+  const startLesson = (i) => { setLesson(i); navigateTo("lessons"); ask(LESSONS[i].prompt); trackEvent("lesson_start", { lesson_index: i, lesson_title: LESSONS[i].title }); };
 
   const startPractice = () => {
     const deck = makeDeck();
@@ -1786,7 +1801,7 @@ export default function PokerTutor() {
     setPot(40); setShowResult(false); setGameMsg("");
     ask(`שחקן מקבל ${ph.join(",")} בפרה-פלופ. תן טיפ קצר על הקלפים האלה`);
     trackEvent("practice_start");
-    setScreen("practice");
+    navigateTo("practice");
   };
 
   const doAction = (action) => {
@@ -1893,7 +1908,13 @@ export default function PokerTutor() {
   };
 
   const openModal = (e, key) => { e.stopPropagation(); setActiveModal(key); };
-  const goTo = (key) => { setActiveModal(null); if(key==="lessonList"){setScreen("lessonList");ask("ברכת פתיחה קצרה");}else if(key==="handRankings"){setScreen("handRankings");ask("מה הכי חשוב לדעת על דירוג ידיים?");}else if(key==="practice"){startPractice();}else setScreen(key); };
+  const goTo = (key) => {
+    setActiveModal(null);
+    if(key==="lessonList"){ navigateTo("lessonList"); ask("ברכת פתיחה קצרה"); }
+    else if(key==="handRankings"){ navigateTo("handRankings"); ask("מה הכי חשוב לדעת על דירוג ידיים?"); }
+    else if(key==="practice"){ startPractice(); }
+    else navigateTo(key);
+  };
 
   const MenuCard = ({id, icon, title, subtitle, color="#c9a84c", accent, fullWidth=false}) => (
     <div style={{background:"rgba(255,255,255,0.04)",border:`1px solid ${accent||"rgba(201,168,76,0.22)"}`,borderRadius:10,padding:"9px 11px",cursor:"pointer",position:"relative",gridColumn:fullWidth?"1/-1":"auto",display:"flex",alignItems:"center",gap:10}}
