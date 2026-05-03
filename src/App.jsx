@@ -541,6 +541,7 @@ ${picked?picked.prompt(gs.playerHand,gs.botHand,comm):""}
   const ctx = analyzeContext(gs.playerHand, communityShow);
   const stageIdx = STAGES.indexOf(stage);
   const pickedConcept = CONCEPTS.find(c=>c.key===concept);
+  const gCtx = {playerHand:gs.playerHand, community:communityShow, pot, stage, currentScore:ctx.current.score, drawFlush:ctx.drawFlush, drawStraight:ctx.drawStraight};
 
   const cs = {
     app:{minHeight:"100vh",background:"radial-gradient(ellipse at 15% 10%,#081e10,#040c07 70%)",fontFamily:"Georgia,serif",color:"#d4e8d4",padding:"10px 12px 20px",direction:"rtl"},
@@ -627,7 +628,9 @@ ${picked?picked.prompt(gs.playerHand,gs.botHand,comm):""}
           </div>
           <div style={{flex:1,minWidth:0}}>
             <StrengthBar value={ctx.strength} label={ctx.current.name}/>
-            <div style={{fontSize:10,color:"#a0c0a0",marginTop:3,lineHeight:1.4}}>{ctx.potential}</div>
+            <div style={{fontSize:10,color:"#a0c0a0",marginTop:3,lineHeight:1.4}}>
+              <RichText text={ctx.potential} gameCtx={gCtx}/>
+            </div>
           </div>
         </div>
         <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:6}}>
@@ -644,7 +647,9 @@ ${picked?picked.prompt(gs.playerHand,gs.botHand,comm):""}
           <div style={{fontSize:9,color:"#c9a84c",fontWeight:700,marginBottom:3}}>📝 {pickedConcept?.label}</div>
           {feedbackLoading
             ? <div style={{display:"flex",gap:4}}>{[0,1,2].map(i=><div key={i} style={{width:5,height:5,borderRadius:"50%",background:"#c9a84c",animation:"bounce 1.2s infinite",animationDelay:`${i*0.2}s`}}/>)}</div>
-            : <div style={{color:"#d4e8d4",fontSize:11,lineHeight:1.6,maxHeight:52,overflow:"hidden"}}>{feedback}</div>
+            : <div style={{color:"#d4e8d4",fontSize:11,lineHeight:1.6,maxHeight:52,overflow:"hidden"}}>
+                <RichText text={feedback} gameCtx={gCtx}/>
+              </div>
           }
         </div>
       )}
@@ -654,7 +659,9 @@ ${picked?picked.prompt(gs.playerHand,gs.botHand,comm):""}
         <div style={{background:resultData.won?"rgba(39,174,96,0.2)":resultData.tied?"rgba(201,168,76,0.14)":"rgba(192,57,43,0.2)",border:`1px solid ${resultData.won?"#27ae60":resultData.tied?"#c9a84c":"#e74c3c"}`,borderRadius:8,padding:"8px 12px",textAlign:"center",marginBottom:10}}>
           <span style={{fontSize:18}}>{resultData.type==="fold"?"🏳️":resultData.won?"🏆":resultData.tied?"🤝":"💸"}</span>
           <span style={{fontWeight:700,fontSize:13,color:"#fff",marginRight:8}}>{resultData.type==="fold"?"פולדת":resultData.won?"ניצחת!":resultData.tied?"תיקו!":"הפסדת"}</span>
-          {resultData.pe&&<span style={{fontSize:10,color:"#a0c0a0"}}>{resultData.pe.name} vs {resultData.be.name}</span>}
+          {resultData.pe&&<span style={{fontSize:10,color:"#a0c0a0"}}>
+            <RichText text={`${resultData.pe.name} vs ${resultData.be.name}`} gameCtx={gCtx}/>
+          </span>}
         </div>
       )}
 
