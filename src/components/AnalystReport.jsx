@@ -770,24 +770,24 @@ const CSS = `
 }
 .ar-reason-label { color: ${C.gold}; font-weight: bold; }
 
-.ar-metrics-row { margin-top: 12px; display: flex; gap: 6px; flex-wrap: wrap; }
+.ar-metrics-row { margin-top: 12px; display: flex; gap: 5px; flex-wrap: nowrap; }
 .ar-pill {
-  padding: 7px 11px 7px 9px; background: transparent;
+  padding: 6px 8px; background: transparent;
   color: ${C.cream}; border: 1px solid ${C.gold};
-  border-radius: 20px; font-family: ${FONT}; font-size: 13px;
-  cursor: pointer; display: flex; align-items: center; gap: 6px;
-  transition: all 0.15s;
+  border-radius: 20px; font-family: ${FONT}; font-size: 12px;
+  cursor: pointer; display: flex; align-items: center; gap: 4px;
+  transition: all 0.15s; white-space: nowrap; flex: 1; justify-content: center;
 }
 .ar-pill-icon {
-  width: 17px; height: 17px; border-radius: 50%;
+  width: 15px; height: 15px; border-radius: 50%;
   background: ${C.goldSoft}; color: ${C.gold};
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: bold; line-height: 1; flex-shrink: 0;
+  font-size: 11px; font-weight: bold; line-height: 1; flex-shrink: 0;
 }
 .ar-pill.active { background: ${C.gold}; color: ${C.bgFelt}; }
 .ar-pill.active .ar-pill-icon { background: rgba(13,40,24,0.4); color: ${C.bgFelt}; }
 .ar-pill-label { font-weight: bold; }
-.ar-pill-result { opacity: 0.85; font-size: 12px; direction: ltr; }
+.ar-pill-result { opacity: 0.85; font-size: 11px; direction: ltr; }
 
 .ar-panel {
   margin-top: 11px; background: ${C.bgPanelDeep};
