@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { db, ref, set, get, update, onValue, off } from "./firebase.js";
 
 // ─── Google Analytics GA4 ─────────────────────────────────────────
@@ -1764,6 +1764,278 @@ ${ctx.drawFlush?"יש דרא לפלאש!":""}${ctx.drawStraight?"יש דרא ל�
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// BOT BATTLE MODE
+// ═══════════════════════════════════════════════════════════════════
+const BOTS = [
+  {
+    id:"aggressive", name:"🔥 תוקפן", color:"#e74c3c", desc:"מהמר תמיד, לעולם לא מפחד",
+    decide:(strength)=> strength < 15 ? "fold" : strength < 40 ? "raise" : "raise",
+  },
+  {
+    id:"conservative", name:"🛡️ שמרן", color:"#3498db", desc:"מחכה ליד טובה, מינימום סיכון",
+    decide:(strength)=> strength < 35 ? "fold" : strength < 65 ? "call" : "raise",
+  },
+];
+
+function BotBattleMode({ onExit }) {
+  const [stats, setStats] = useState({ 0: 0, 1: 0, ties: 0, rounds: 0 });
+  const [game, setGame] = useState(null);
+  const [log, setLog] = useState([]);
+  const [running, setRunning] = useState(false);
+  const [speed, setSpeed] = useState(900); // ms per step
+  const [chips, setChips] = useState([1000, 1000]);
+  const [phase, setPhase] = useState("idle"); // idle | dealing | flop | turn | river | showdown
+  const runRef = useRef(false);
+
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+  const addLog = (msg, color="#d4e8d4") => setLog(l => [{msg, color, id:Date.now()+Math.random()}, ...l].slice(0,12));
+
+  const runRound = async () => {
+    const deck = makeDeck();
+    const h0 = [deck.pop(), deck.pop()];
+    const h1 = [deck.pop(), deck.pop()];
+    const community = [deck.pop(), deck.pop(), deck.pop(), deck.pop(), deck.pop()];
+    let pot = 30;
+    let revealed = 0;
+
+    setGame({ h0, h1, community, revealed, pot, actions: ["", ""], stage:"preflop" });
+    setPhase("dealing");
+    addLog("🃏 חלוקת קלפים...", "#c9a84c");
+    await sleep(speed);
+
+    // Helper: bot action at a stage
+    const botAction = async (stage, rev) => {
+      if (!runRef.current) return false;
+      const comm = community.slice(0, rev);
+      const s0 = analyzeContext(h0, comm).strength;
+      const s1 = analyzeContext(h1, comm).strength;
+      const a0 = BOTS[0].decide(s0);
+      const a1 = BOTS[1].decide(s1);
+      const actionLabels = { fold:"פולד ❌", call:"קול ✅", raise:"ריייז 📈" };
+
+      setGame(g => ({ ...g, actions: [actionLabels[a0], actionLabels[a1]], stage, revealed: rev, pot }));
+      addLog(`${BOTS[0].name}: ${actionLabels[a0]}`, BOTS[0].color);
+      await sleep(speed * 0.5);
+      addLog(`${BOTS[1].name}: ${actionLabels[a1]}`, BOTS[1].color);
+      await sleep(speed * 0.5);
+
+      if (a0 === "raise") pot += 60; else if (a0 === "call") pot += 20;
+      if (a1 === "raise") pot += 60; else if (a1 === "call") pot += 20;
+      setGame(g => ({ ...g, pot }));
+
+      // Early fold?
+      if (a0 === "fold" && a1 !== "fold") return { winner: 1, by: "fold" };
+      if (a1 === "fold" && a0 !== "fold") return { winner: 0, by: "fold" };
+      return null;
+    };
+
+    // Pre-flop
+    let result = await botAction("preflop", 0);
+    if (result) { await finishRound(result, h0, h1, community, pot); return; }
+
+    // Flop
+    if (!runRef.current) return;
+    revealed = 3;
+    setGame(g => ({ ...g, revealed:3 }));
+    setPhase("flop");
+    addLog("🃏 פלופ!", "#c9a84c");
+    await sleep(speed * 0.7);
+    result = await botAction("flop", 3);
+    if (result) { await finishRound(result, h0, h1, community, pot); return; }
+
+    // Turn
+    if (!runRef.current) return;
+    revealed = 4;
+    setGame(g => ({ ...g, revealed:4 }));
+    setPhase("turn");
+    addLog("🃏 טרן!", "#c9a84c");
+    await sleep(speed * 0.7);
+    result = await botAction("turn", 4);
+    if (result) { await finishRound(result, h0, h1, community, pot); return; }
+
+    // River
+    if (!runRef.current) return;
+    revealed = 5;
+    setGame(g => ({ ...g, revealed:5 }));
+    setPhase("river");
+    addLog("🃏 ריבר!", "#c9a84c");
+    await sleep(speed * 0.7);
+    result = await botAction("river", 5);
+    if (result) { await finishRound(result, h0, h1, community, pot); return; }
+
+    // Showdown
+    if (!runRef.current) return;
+    setPhase("showdown");
+    const e0 = evaluateHand([...h0, ...community]);
+    const e1 = evaluateHand([...h1, ...community]);
+    const w = e0.score > e1.score ? 0 : e0.score < e1.score ? 1 : -1;
+    await finishRound({ winner: w, by:"showdown", e0, e1 }, h0, h1, community, pot);
+  };
+
+  const finishRound = async ({ winner, by, e0, e1 }, h0, h1, community, pot) => {
+    if (winner === -1) {
+      addLog(`🤝 תיקו! סיר: ${pot}`, "#c9a84c");
+      setStats(s => ({ ...s, ties: s.ties+1, rounds: s.rounds+1 }));
+      setChips(c => [c[0]+pot/2, c[1]+pot/2]);
+    } else {
+      const winMsg = by==="fold" ? `ניצח בפולד! +${pot}` : `ניצח! ${e0||e1 ? (winner===0?e0?.name:e1?.name):""} +${pot}`;
+      addLog(`${BOTS[winner].name} ${winMsg}`, BOTS[winner].color);
+      setStats(s => ({ ...s, [winner]: s[winner]+1, rounds: s.rounds+1 }));
+      setChips(c => { const nc=[...c]; nc[winner]+=pot; nc[1-winner]-=pot; return nc; });
+    }
+    setGame(g => g ? ({ ...g, showHands:true, winner, e0, e1, by }) : null);
+    setPhase("showdown");
+    await sleep(speed * 1.2);
+  };
+
+  const startAutoPlay = async () => {
+    runRef.current = true;
+    setRunning(true);
+    while (runRef.current) {
+      await runRound();
+      if (!runRef.current) break;
+      await sleep(speed * 0.4);
+    }
+    setRunning(false);
+  };
+
+  const stopAutoPlay = () => {
+    runRef.current = false;
+    setRunning(false);
+  };
+
+  useEffect(() => { return () => { runRef.current = false; }; }, []);
+
+  const S = {
+    app:{minHeight:"100vh",background:"radial-gradient(ellipse at 30% 20%,#0d3320,#061a0e 40%,#030d07 100%)",fontFamily:"Georgia,serif",color:"#d4e8d4",padding:"14px 14px",direction:"rtl",boxSizing:"border-box"},
+    panel:{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(201,168,76,0.2)",borderRadius:10,padding:"10px 12px",marginBottom:8},
+  };
+
+  const total = stats.rounds || 1;
+  const pct0 = Math.round(stats[0]/total*100);
+  const pct1 = Math.round(stats[1]/total*100);
+
+  return (
+    <div style={S.app}>
+      <style>{`@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}} @keyframes slideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}`}</style>
+
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+        <button onClick={()=>{stopAutoPlay();onExit();}} style={{padding:"7px 12px",borderRadius:7,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.07)",color:"#8a9a8a",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:12}}>← יציאה</button>
+        <div style={{fontSize:18,fontWeight:700,color:"#c9a84c",letterSpacing:1}}>🤖 קרב בוטים</div>
+      </div>
+
+      {/* Bot profiles */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:6,marginBottom:8,alignItems:"center"}}>
+        {BOTS.map((bot,i)=>(
+          <div key={bot.id} style={{background:`rgba(${i===0?"231,76,60":"52,152,219"},0.1)`,border:`1px solid ${bot.color}40`,borderRadius:9,padding:"8px 10px",textAlign:i===0?"right":"left"}}>
+            <div style={{fontWeight:700,fontSize:13,color:bot.color}}>{bot.name}</div>
+            <div style={{fontSize:10,color:"#6a9a6a",marginTop:2}}>{bot.desc}</div>
+            <div style={{fontSize:12,color:"#c9a84c",fontWeight:700,marginTop:4}}>💰 {Math.round(chips[i])}</div>
+          </div>
+        ))}
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:11,color:"#6a9a6a"}}>סיר</div>
+          <div style={{fontSize:16,fontWeight:700,color:"#c9a84c"}}>{game?.pot||30}</div>
+        </div>
+      </div>
+
+      {/* Stats bar */}
+      {stats.rounds > 0 && (
+        <div style={{...S.panel,padding:"8px 12px"}}>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:5}}>
+            <span style={{color:BOTS[0].color,fontWeight:700}}>{stats[0]} ניצחונות ({pct0}%)</span>
+            <span style={{color:"#6a9a6a"}}>{stats.rounds} סיבובים</span>
+            <span style={{color:BOTS[1].color,fontWeight:700}}>{pct1}% ({stats[1]} ניצחונות)</span>
+          </div>
+          <div style={{height:8,background:"rgba(255,255,255,0.08)",borderRadius:4,overflow:"hidden",display:"flex"}}>
+            <div style={{width:`${pct0}%`,background:BOTS[0].color,transition:"width 0.5s ease"}}/>
+            <div style={{flex:1,background:BOTS[1].color,transition:"all 0.5s ease"}}/>
+          </div>
+        </div>
+      )}
+
+      {/* Game board */}
+      {game && (
+        <div style={S.panel}>
+          {/* Bot 0 hand */}
+          <div style={{marginBottom:8}}>
+            <div style={{fontSize:10,color:BOTS[0].color,marginBottom:4,fontWeight:700}}>{BOTS[0].name} {game.actions[0]&&<span style={{color:"#d4e8d4",fontWeight:400}}>— {game.actions[0]}</span>}</div>
+            <div style={{display:"flex",gap:4}}>
+              {game.h0.map((c,i)=><Card key={i} str={c} small highlight={game.winner===0&&game.showHands}/>)}
+              {game.showHands && game.e0 && <span style={{alignSelf:"center",fontSize:11,color:"#c9a84c",marginRight:6}}>{game.e0.name}</span>}
+            </div>
+          </div>
+
+          {/* Community */}
+          <div style={{marginBottom:8}}>
+            <div style={{fontSize:10,color:"#6a9a6a",marginBottom:4}}>{STAGE_NAMES[game.stage]||"פרה-פלופ"}</div>
+            <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+              {game.community.slice(0, game.revealed).map((c,i)=><Card key={i} str={c} small/>)}
+              {Array(5 - game.revealed).fill(null).map((_,i)=>(
+                <div key={i} style={{width:40,height:58,borderRadius:5,border:"1.5px dashed rgba(201,168,76,0.15)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <span style={{color:"rgba(201,168,76,0.1)",fontSize:12}}>?</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Bot 1 hand */}
+          <div>
+            <div style={{fontSize:10,color:BOTS[1].color,marginBottom:4,fontWeight:700}}>{BOTS[1].name} {game.actions[1]&&<span style={{color:"#d4e8d4",fontWeight:400}}>— {game.actions[1]}</span>}</div>
+            <div style={{display:"flex",gap:4}}>
+              {game.h1.map((c,i)=><Card key={i} str={c} small highlight={game.winner===1&&game.showHands}/>)}
+              {game.showHands && game.e1 && <span style={{alignSelf:"center",fontSize:11,color:"#c9a84c",marginRight:6}}>{game.e1.name}</span>}
+            </div>
+          </div>
+
+          {/* Winner banner */}
+          {game.showHands && game.winner !== undefined && (
+            <div style={{marginTop:10,textAlign:"center",padding:"7px",borderRadius:7,background:game.winner===-1?"rgba(201,168,76,0.1)":`rgba(${game.winner===0?"231,76,60":"52,152,219"},0.15)`,border:`1px solid ${game.winner===-1?"#c9a84c":BOTS[game.winner>-1?game.winner:0].color}40`,fontSize:13,fontWeight:700,color:game.winner===-1?"#c9a84c":BOTS[game.winner>-1?game.winner:0].color}}>
+              {game.winner===-1 ? "🤝 תיקו!" : `${BOTS[game.winner].name} ניצח!`}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Log */}
+      <div style={{...S.panel,maxHeight:110,overflow:"hidden"}}>
+        <div style={{fontSize:9,color:"#6a9a6a",marginBottom:5,letterSpacing:1}}>יומן פעולות</div>
+        {log.length===0 && <div style={{fontSize:11,color:"#4a6a4a"}}>לחץ "התחל" כדי לראות את הבוטים משחקים...</div>}
+        {log.map((l)=>(
+          <div key={l.id} style={{fontSize:11,color:l.color,marginBottom:2,animation:"slideIn 0.2s ease"}}>{l.msg}</div>
+        ))}
+      </div>
+
+      {/* Controls */}
+      <div style={{display:"flex",gap:6,marginBottom:6}}>
+        {!running ? (
+          <button onClick={startAutoPlay} style={{flex:1,padding:"12px",borderRadius:9,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:14,fontWeight:700,background:"linear-gradient(135deg,#27ae60,#1e8449)",color:"#fff",boxShadow:"0 3px 12px rgba(39,174,96,0.3)"}}>
+            ▶ התחל
+          </button>
+        ) : (
+          <button onClick={stopAutoPlay} style={{flex:1,padding:"12px",borderRadius:9,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:14,fontWeight:700,background:"linear-gradient(135deg,#e74c3c,#c0392b)",color:"#fff"}}>
+            ⏸ עצור
+          </button>
+        )}
+        <button onClick={()=>{ setStats({0:0,1:0,ties:0,rounds:0}); setChips([1000,1000]); setGame(null); setLog([]); }} style={{padding:"12px 14px",borderRadius:9,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.07)",color:"#8a9a8a",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:12}}>
+          🔄 אפס
+        </button>
+      </div>
+      {/* Speed control */}
+      <div style={{display:"flex",gap:6,justifyContent:"center"}}>
+        {[{l:"🐢 איטי",v:1600},{l:"⚡ מהיר",v:800},{l:"🚀 טורבו",v:280}].map(({l,v})=>(
+          <button key={v} onClick={()=>setSpeed(v)} style={{padding:"6px 12px",borderRadius:7,border:`1px solid ${speed===v?"#c9a84c":"rgba(255,255,255,0.1)"}`,background:speed===v?"rgba(201,168,76,0.15)":"transparent",color:speed===v?"#c9a84c":"#6a9a6a",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:11}}>
+            {l}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // MAIN APP
 // ═══════════════════════════════════════════════════════════════════
 export default function PokerTutor() {
@@ -1859,6 +2131,7 @@ export default function PokerTutor() {
   if(screen==="comparison") return <HandComparisonLearn onExit={()=>setScreen("menu")}/>;
   if(screen==="math") return <MathMode onExit={()=>setScreen("menu")}/>;
   if(screen==="twoplayer") return <TwoPlayerMode onExit={()=>setScreen("menu")}/>;
+  if(screen==="botbattle") return <BotBattleMode onExit={()=>setScreen("menu")}/>;
 
   const CARD_MODALS = {
     coached: {
@@ -2017,6 +2290,7 @@ export default function PokerTutor() {
       <div style={{display:"grid",gap:6}}>
         <MenuCard id="practice" icon="🎮" title="תרגול חופשי" subtitle="נגד בוט · בלי לחץ" fullWidth/>
         <MenuCard id="twoplayer" icon="👥" title="משחק לשניים — חי!" subtitle="שני מכשירים · בזמן אמת" color="#9b59b6" accent="rgba(155,89,182,0.4)" fullWidth/>
+        <MenuCard id="botbattle" icon="🤖" title="קרב בוטים" subtitle="תוקפן vs שמרן · ראה מי מנצח" color="#e74c3c" accent="rgba(231,76,60,0.35)" fullWidth/>
       </div>
     </div>
   );
