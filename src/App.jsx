@@ -2372,26 +2372,72 @@ export default function PokerTutor() {
     else navigateTo(key);
   };
 
-  const MenuCard = ({id, icon, title, subtitle, color="#c9a84c", accent, fullWidth=false}) => (
-    <div style={{background:"rgba(255,255,255,0.04)",border:`1px solid ${accent||"rgba(201,168,76,0.22)"}`,borderRadius:10,padding:"9px 11px",cursor:"pointer",position:"relative",gridColumn:fullWidth?"1/-1":"auto",display:"flex",alignItems:"center",gap:10}}
-      onClick={()=>goTo(id)}>
-      <div style={{fontSize:fullWidth?18:16,flexShrink:0}}>{icon}</div>
-      <div style={{flex:1,minWidth:0}}>
-        <div style={{fontWeight:700,fontSize:12,color,marginBottom:1}}>{title}</div>
-        <div style={{color:"#6a9a6a",fontSize:10,lineHeight:1.3}}>{subtitle}</div>
-      </div>
-      <button onClick={(e)=>{e.stopPropagation();openModal(e,id);}}
-        style={{width:22,height:22,borderRadius:"50%",border:"1px solid rgba(201,168,76,0.35)",background:"rgba(201,168,76,0.1)",color:"#c9a84c",cursor:"pointer",fontSize:12,fontWeight:700,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Georgia,serif",zIndex:1}}>
+  // MenuCard: supports fullWidth and compact (3-col) modes
+  const MenuCard = ({id, icon, title, subtitle, color="#c9a84c", accent, fullWidth=false, compact=false}) => (
+    <div
+      onClick={()=>goTo(id)}
+      style={{
+        background:`linear-gradient(135deg,${accent?accent.replace("0.","0.12"):"rgba(255,255,255,0.05)"} 0%,rgba(255,255,255,0.02) 100%)`,
+        border:`1px solid ${accent||"rgba(201,168,76,0.22)"}`,
+        borderRadius:12,
+        padding: compact ? "10px 8px" : "11px 13px",
+        cursor:"pointer",
+        position:"relative",
+        gridColumn:fullWidth?"1/-1":"auto",
+        display:"flex",
+        flexDirection: compact ? "column" : "row",
+        alignItems: compact ? "center" : "center",
+        gap: compact ? 5 : 10,
+        minHeight: compact ? 72 : 56,
+        boxSizing:"border-box",
+        boxShadow:"0 2px 8px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,255,255,0.04)",
+        textAlign:"right",
+        direction:"rtl",
+      }}>
+      {/* ? button — top-left corner always */}
+      <button
+        onClick={(e)=>{e.stopPropagation();openModal(e,id);}}
+        style={{
+          position:"absolute", top:6, left:6,
+          width:20, height:20, borderRadius:"50%",
+          border:"1px solid rgba(201,168,76,0.35)",
+          background:"rgba(201,168,76,0.1)",
+          color:"#c9a84c", cursor:"pointer",
+          fontSize:11, fontWeight:700,
+          display:"flex", alignItems:"center", justifyContent:"center",
+          fontFamily:"Georgia,serif", zIndex:1, flexShrink:0,
+        }}>
         ?
       </button>
+      {compact ? (
+        <>
+          <div style={{fontSize:20,lineHeight:1,marginTop:4}}>{icon}</div>
+          <div style={{fontWeight:700,fontSize:11,color,textAlign:"center",lineHeight:1.25,wordBreak:"break-word"}}>{title}</div>
+        </>
+      ) : (
+        <>
+          <div style={{fontSize:18,flexShrink:0}}>{icon}</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontWeight:700,fontSize:13,color,marginBottom:2,textAlign:"right"}}>{title}</div>
+            {subtitle && <div style={{color:"#9ec49e",fontSize:10,lineHeight:1.3,textAlign:"right"}}>{subtitle}</div>}
+          </div>
+        </>
+      )}
+    </div>
+  );
+
+  const SectionLabel = ({children}) => (
+    <div style={{fontSize:10,fontWeight:700,color:"#7ab87a",letterSpacing:2.5,marginBottom:6,paddingRight:3,textTransform:"uppercase"}}>
+      {children}
     </div>
   );
 
   if(screen==="menu") return(
-    <div style={{height:"100vh",overflow:"hidden",background:"radial-gradient(ellipse at 30% 20%,#0d3320,#061a0e 40%,#030d07 100%)",fontFamily:"Georgia,serif",color:"#d4e8d4",padding:"10px 14px",direction:"rtl",boxSizing:"border-box"}}>
+    <div style={{height:"100vh",overflow:"hidden",background:"radial-gradient(ellipse at 30% 20%,#0d3320,#061a0e 40%,#030d07 100%)",fontFamily:"Georgia,serif",color:"#d4e8d4",padding:"10px 14px 8px",direction:"rtl",boxSizing:"border-box",display:"flex",flexDirection:"column",gap:0}}>
       <style>{`
         @keyframes fadeIn{from{opacity:0}to{opacity:1}}
         @keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+        *{box-sizing:border-box;}
       `}</style>
 
       {/* Modal */}
@@ -2416,44 +2462,56 @@ export default function PokerTutor() {
         </div>
       )}
 
-      {/* Header — compact */}
-      <div style={{textAlign:"center",marginBottom:10}}>
-        <div style={{fontSize:28,marginBottom:4}}>🃏</div>
-        <div style={{...S.title,fontSize:20}}>מאסטר פוקר</div>
-        <div style={{display:"flex",gap:6,justifyContent:"center",marginTop:8}}>
+      {/* Header */}
+      <div style={{textAlign:"center",marginBottom:8,flexShrink:0}}>
+        <div style={{fontSize:26,marginBottom:2}}>🃏</div>
+        <div style={{...S.title,fontSize:19}}>מאסטר פוקר</div>
+        <div style={{display:"flex",gap:8,justifyContent:"center",marginTop:7}}>
           <button onClick={()=>{ const url="https://sivanrab-eng.github.io/PokerTuter/"; if(navigator.share){navigator.share({title:"מאסטר פוקר",url});}else{const a=document.createElement('a');a.href=`https://wa.me/?text=${encodeURIComponent("🃏 מאסטר פוקר\n"+url)}`;a.target="_blank";a.rel="noopener noreferrer";a.click();} }}
-            style={{padding:"5px 12px",borderRadius:7,border:"1px solid rgba(201,168,76,0.4)",background:"rgba(201,168,76,0.08)",color:"#c9a84c",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:11,fontWeight:700}}>
+            style={{padding:"6px 18px",borderRadius:24,border:"1px solid rgba(201,168,76,0.45)",background:"rgba(201,168,76,0.1)",color:"#c9a84c",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:11,fontWeight:700}}>
             📤 שתף
           </button>
           <button onClick={()=>{ if(window.__pwaPrompt){window.__pwaPrompt.prompt();}else{alert("תפריט הדפדפן (⋮) ← הוסף למסך הבית");} }}
-            style={{padding:"5px 12px",borderRadius:7,border:"1px solid rgba(39,174,96,0.4)",background:"rgba(39,174,96,0.08)",color:"#27ae60",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:11,fontWeight:700}}>
+            style={{padding:"6px 18px",borderRadius:24,border:"1px solid rgba(80,180,100,0.45)",background:"rgba(80,180,100,0.1)",color:"#6ecf82",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:11,fontWeight:700}}>
             📲 שמור
           </button>
         </div>
       </div>
 
-      {/* Section 1: תיאוריה ולמידה — שיעורים+דירוג למעלה, לומד תוך כדי מתחת */}
-      <div style={{fontSize:9,color:"#6a9a6a",letterSpacing:2,marginBottom:5,paddingRight:2}}>תיאוריה ולמידה</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
-        <MenuCard id="lessons" icon="📚" title="שיעורים" subtitle="4 שיעורים מדורגים"/>
-        <MenuCard id="handRankings" icon="🏆" title="דירוג הידיים" subtitle="כל 9 הקומבינציות"/>
-        <MenuCard id="coached" icon="🎓" title="לומד תוך כדי משחק" subtitle="ניתוח חכם + הסברים בזמן אמת" accent="rgba(201,168,76,0.5)" fullWidth/>
+      {/* Section 1: תיאוריה ולמידה */}
+      <div style={{marginBottom:9,flexShrink:0}}>
+        <SectionLabel>תיאוריה ולמידה</SectionLabel>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+          <MenuCard id="lessons" icon="📚" title="שיעורים" subtitle="4 שיעורים מדורגים"/>
+          <MenuCard id="handRankings" icon="🏆" title="דירוג הידיים" subtitle="כל 9 הקומבינציות"/>
+        </div>
       </div>
 
-      {/* Section 2: תרגול מעשי */}
-      <div style={{fontSize:9,color:"#6a9a6a",letterSpacing:2,marginBottom:5,paddingRight:2}}>תרגול מעשי</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
-        <MenuCard id="comparison" icon="🥊" title="מי מנצח?" subtitle="קל לקשה" color="#27ae60" accent="rgba(39,174,96,0.3)"/>
-        <MenuCard id="whatbeats" icon="⚔️" title="מה לוקח מה?" subtitle="ויזואלי + קלפים"/>
-        <MenuCard id="math" icon="🧮" title="הסתברות פוקר" subtitle="אאוטס · כלל ה-4 · Pot Odds" color="#3498db" accent="rgba(52,152,219,0.3)" fullWidth/>
+      {/* Section 2: לומד תוך כדי משחק */}
+      <div style={{marginBottom:9,flexShrink:0}}>
+        <SectionLabel>לומד תוך כדי משחק</SectionLabel>
+        <div style={{display:"grid",gridTemplateColumns:"1fr",gap:6}}>
+          <MenuCard id="coached" icon="🎓" title="לומד תוך כדי משחק" subtitle="ניתוח חכם + הסברים בזמן אמת" accent="rgba(201,168,76,0.5)" fullWidth/>
+        </div>
       </div>
 
-      {/* Section 3: משחק */}
-      <div style={{fontSize:9,color:"#6a9a6a",letterSpacing:2,marginBottom:5,paddingRight:2}}>משחק</div>
-      <div style={{display:"grid",gap:6}}>
-        <MenuCard id="practice" icon="🎮" title="תרגול חופשי" subtitle="נגד בוט · בלי לחץ" fullWidth/>
-        <MenuCard id="twoplayer" icon="👥" title="משחק לשניים — חי!" subtitle="שני מכשירים · בזמן אמת" color="#9b59b6" accent="rgba(155,89,182,0.4)" fullWidth/>
-        <MenuCard id="botbattle" icon="🤖" title="קרב בוטים" subtitle="תוקפן vs שמרן · ראה מי מנצח" color="#e74c3c" accent="rgba(231,76,60,0.35)" fullWidth/>
+      {/* Section 3: אימון ויזואלי */}
+      <div style={{marginBottom:9,flexShrink:0}}>
+        <SectionLabel>אימון ויזואלי בתנאי מעבדה</SectionLabel>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+          <MenuCard id="comparison" icon="🥊" title="מי מנצח?" subtitle="קל לקשה" color="#6ecf82" accent="rgba(80,180,100,0.3)"/>
+          <MenuCard id="math" icon="🧮" title="הסתברות פוקר" subtitle="אאוטס · כלל ה-4" color="#6ab0e8" accent="rgba(70,140,210,0.3)"/>
+        </div>
+      </div>
+
+      {/* Section 4: זירת המשחק — 3 compact cards */}
+      <div style={{flexShrink:0}}>
+        <SectionLabel>זירת המשחק: בחר את הסביבה שלך</SectionLabel>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+          <MenuCard id="practice"   icon="🎮" title="תרגול חופשי"   color="#5dd6c0" accent="rgba(70,190,170,0.3)" compact/>
+          <MenuCard id="twoplayer"  icon="👥" title="משחק לשניים"   color="#a99ee8" accent="rgba(110,100,200,0.3)" compact/>
+          <MenuCard id="botbattle"  icon="🤖" title="קרב בוטים"     color="#e09080" accent="rgba(190,100,80,0.3)"  compact/>
+        </div>
       </div>
     </div>
   );
