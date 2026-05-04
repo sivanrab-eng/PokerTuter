@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { db, ref, set, get, update, onValue, off } from "./firebase.js";
+import AnalystReport from "./components/AnalystReport.jsx";
 
 // ─── Google Analytics GA4 ─────────────────────────────────────────
 const GA_ID = "G-W9BL62BYLE";
@@ -2296,6 +2297,7 @@ export default function PokerTutor() {
   if(screen==="math") return <MathMode onExit={()=>setScreen("menu")}/>;
   if(screen==="twoplayer") return <TwoPlayerMode onExit={()=>setScreen("menu")}/>;
   if(screen==="botbattle") return <BotBattleMode onExit={()=>setScreen("menu")}/>;
+  if(screen==="analyst") return <AnalystReport onExit={()=>setScreen("menu")}/>;
 
   const CARD_MODALS = {
     coached: {
@@ -2369,6 +2371,14 @@ export default function PokerTutor() {
         {b:"מה מראה?", t:"שני סגנונות שחקן שונים: תוקפן (מריייז תמיד) מול שמרן (מחכה ליד טובה). אפשר לשלוט במהירות ולראות סטטיסטיקות ניצחונות."},
         {b:"מה בא ללמד?", t:"איך אסטרטגיה משפיעה על תוצאות לאורך זמן — ולמה אגרסיביות לא תמיד מנצחת."},
         {b:"למה הוא פה?", t:"כדי לראות פוקר 'מבחוץ' ולהבין דפוסים בלי לקחת החלטות בעצמך."},
+      ]},
+    analyst: {
+      title:"📊 דו״ח אנליסט",
+      items:[
+        {b:"מה זה?", t:"מסך ניתוח עומק של יד פוקר אחת — שלב אחר שלב, החלטה אחר החלטה."},
+        {b:"מה מראה?", t:"4 אקורדיונים (פרה-פלופ/פלופ/טרן/ריבר). בכל שלב: השוואה בין הפעולה שלך להמלצה האנליסטית, אקוויטי, $EV, פירוט מה גובר עלייך + אילו קלפים ספציפיים."},
+        {b:"מה בא ללמד?", t:"חשיבה מתמטית על פוקר. למה החלטה מסוימת הייתה נכונה או שגויה, ומה ההסתברות שהיריב היה מנצח אותך."},
+        {b:"למה הוא פה?", t:"לראות יד שלך בעיניים של מנתח מקצועי — לא רק 'מה קרה' אלא 'מה היה צפוי לקרות'."},
       ]},
   };
 
@@ -2455,6 +2465,7 @@ export default function PokerTutor() {
         <MenuCard id="comparison" icon="🥊" title="מי מנצח?" subtitle="קל לקשה" color="#27ae60" accent="rgba(39,174,96,0.3)"/>
         <MenuCard id="whatbeats" icon="⚔️" title="מה לוקח מה?" subtitle="ויזואלי + קלפים"/>
         <MenuCard id="math" icon="🧮" title="הסתברות פוקר" subtitle="אאוטס · כלל ה-4 · Pot Odds" color="#3498db" accent="rgba(52,152,219,0.3)" fullWidth/>
+        <MenuCard id="analyst" icon="📊" title="דו״ח אנליסט" subtitle="ניתוח יד מלא · אקוויטי · EV · מה גובר עלייך" color="#c9a84c" accent="rgba(201,168,76,0.4)" fullWidth/>
       </div>
 
       {/* Section 3: משחק */}
