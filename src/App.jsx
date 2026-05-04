@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { db, ref, set, get, update, onValue, off } from "./firebase.js";
-import AnalystReport from "./components/AnalystReport.jsx";
+import AnalystReport, { buildStreetsFromHand } from "./components/AnalystReport.jsx";
 
 // ─── Google Analytics GA4 ─────────────────────────────────────────
 const GA_ID = "G-W9BL62BYLE";
@@ -638,64 +638,54 @@ ${picked?picked.prompt(gs.playerHand,gs.botHand,comm):""}
 
   if(!gs) return <div style={{color:"#6a9a6a",textAlign:"center",padding:40}}>מכין שולחן...</div>;
 
-  // Analysis screen
+  // Analysis screen — דו״ח אנליסט עם נתונים אמיתיים מהיד שזה עתה שוחקה
   if(showAnalysis) {
-    const Bold = ({children})=><span style={{color:"#c9a84c",fontWeight:700}}>{children}</span>;
-    const renderInline = (text) => {
-      if(!text) return null;
-      const parts = text.split(/\*\*(.*?)\*\*/g);
-      return parts.map((p,i)=>i%2===1?<Bold key={i}>{p}</Bold>:p);
-    };
-    const Section = ({icon, title, color, children, delay}) => (
-      <div style={{background:"rgba(255,255,255,0.04)",border:`1px solid ${color}30`,borderRadius:12,padding:"14px 16px",marginBottom:10,animation:`fadeUp 0.4s ease ${delay}s both`}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-          <span style={{fontSize:18}}>{icon}</span>
-          <span style={{fontSize:11,fontWeight:700,color,letterSpacing:1.5}}>{title}</span>
-        </div>
-        <div style={{fontSize:12,color:"#b4c8b4",lineHeight:1.65}}>{children}</div>
-      </div>
-    );
-    return (
-      <div style={{minHeight:"100vh",background:"radial-gradient(ellipse at 30% 20%,#0d3320,#061a0e 40%,#030d07 100%)",fontFamily:"Georgia,serif",color:"#d4e8d4",padding:"16px",direction:"rtl",boxSizing:"border-box",overflowY:"auto"}}>
-        <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}`}</style>
-        <div style={{textAlign:"center",marginBottom:14,animation:"fadeUp 0.4s ease"}}>
-          <div style={{fontSize:20,fontWeight:700,color:"#c9a84c",marginBottom:3}}>📊 ניתוח הסשן</div>
-          <div style={{fontSize:11,color:"#4a7a4a"}}>סיבוב {roundNum} {analysisData?` · ${analysisData.result}`:""}</div>
-        </div>
+    // בנייה של נתוני streets מהמצב האמיתי של היד
+    const finalCtx = gs ? analyzeContext(gs.playerHand, gs.community) : null;
+    const reachedStage = resultData?.type === "fold"
+      ? (actionLogRef.current.find(a=>a.action==="fold")?.round || stage)
+      : "showdown";
 
-        {analysisLoading || !analysisData ? (
-          <div style={{textAlign:"center",padding:"60px 20px",color:"#6a9a6a"}}>מנתח...</div>
+    const streets = gs ? buildStreetsFromHand({
+      playerHand: gs.playerHand,
+      community: gs.community,
+      actions: [...actionLogRef.current].reverse(),
+      resultData,
+      reachedStage,
+      analyzeContext,
+    }) : null;
+
+    // קביעת result badge
+    const resultText = resultData?.won ? "🏆 ניצחון"
+                     : resultData?.tied ? "🤝 תיקו"
+                     : resultData?.type === "fold" ? "🏳️ פולד"
+                     : "💸 הפסד";
+    const resultType = resultData?.won ? "win"
+                     : resultData?.tied ? "split"
+                     : "loss";
+
+    const handProp = gs ? {
+      handId: `#${roundNum}`,
+      playerCards: gs.playerHand,
+      boardCards: gs.community,
+      potSize: pot,
+      finalResult: { type: resultType, text: resultText },
+    } : null;
+
+    return (
+      <div style={{minHeight:"100vh",background:"#0d2818",direction:"rtl"}}>
+        {handProp && streets ? (
+          <AnalystReport
+            hand={handProp}
+            streets={streets}
+            onExit={()=>{setShowAnalysis(false);onExit();history.pushState({screen:"menu"},"","");}}
+          />
         ) : (
-          <>
-            <Section icon="1️⃣" title="הצעד הראשון" color="#e74c3c" delay={0.1}>
-              {renderInline(analysisData.firstMove)}
-            </Section>
-            <Section icon="⚡" title="המהלך הקריטי" color="#f39c12" delay={0.2}>
-              {renderInline(analysisData.keyPlay)}
-            </Section>
-            <Section icon="📋" title="סיכום האנליסט" color="#27ae60" delay={0.3}>
-              <div style={{marginBottom:10}}>
-                <div style={{fontSize:11,color:"#27ae60",fontWeight:700,marginBottom:4}}>✅ מה עשית טוב</div>
-                <div>{renderInline(analysisData.good)}</div>
-              </div>
-              <div style={{marginBottom:10}}>
-                <div style={{fontSize:11,color:"#e74c3c",fontWeight:700,marginBottom:4}}>🔧 מה לשפר</div>
-                <div>{renderInline(analysisData.improve)}</div>
-              </div>
-              <div>
-                <div style={{fontSize:11,color:"#c9a84c",fontWeight:700,marginBottom:6}}>💡 לזכור להמשך</div>
-                {analysisData.takeaways.map((t,i)=>(
-                  <div key={i} style={{display:"flex",gap:8,alignItems:"flex-start",marginBottom:5}}>
-                    <span style={{color:"#c9a84c",fontSize:10,marginTop:3}}>◆</span>
-                    <span>{renderInline(t)}</span>
-                  </div>
-                ))}
-              </div>
-            </Section>
-          </>
+          <div style={{padding:60,textAlign:"center",color:"#6a9a6a",fontFamily:"Georgia,serif"}}>טוען ניתוח...</div>
         )}
 
-        <div style={{display:"flex",gap:8,marginTop:4,animation:"fadeUp 0.4s ease 0.5s both"}}>
+        {/* פעולות תחתונות — סיבוב חדש / יציאה */}
+        <div style={{position:"sticky",bottom:0,background:"linear-gradient(to top, #0d2818, rgba(13,40,24,0.95) 80%, transparent)",padding:"14px 14px 18px",display:"flex",gap:8,direction:"rtl"}}>
           <button onClick={()=>{setShowAnalysis(false);setRoundNum(n=>n+1);deal();}} style={{flex:1,padding:14,borderRadius:10,border:"none",background:"linear-gradient(135deg,#27ae60,#1e8449)",color:"#fff",fontFamily:"Georgia,serif",fontSize:14,fontWeight:700,cursor:"pointer",boxShadow:"0 3px 12px rgba(39,174,96,0.3)"}}>🔄 סיבוב חדש</button>
           <button onClick={()=>{setShowAnalysis(false);onExit();history.pushState({screen:"menu"},"","");}} style={{padding:"14px 16px",borderRadius:10,border:"1px solid rgba(255,255,255,0.1)",background:"rgba(255,255,255,0.05)",color:"#8a9a8a",fontFamily:"Georgia,serif",fontSize:12,cursor:"pointer"}}>← יציאה</button>
         </div>
@@ -2297,7 +2287,6 @@ export default function PokerTutor() {
   if(screen==="math") return <MathMode onExit={()=>setScreen("menu")}/>;
   if(screen==="twoplayer") return <TwoPlayerMode onExit={()=>setScreen("menu")}/>;
   if(screen==="botbattle") return <BotBattleMode onExit={()=>setScreen("menu")}/>;
-  if(screen==="analyst") return <AnalystReport onExit={()=>setScreen("menu")}/>;
 
   const CARD_MODALS = {
     coached: {
@@ -2371,14 +2360,6 @@ export default function PokerTutor() {
         {b:"מה מראה?", t:"שני סגנונות שחקן שונים: תוקפן (מריייז תמיד) מול שמרן (מחכה ליד טובה). אפשר לשלוט במהירות ולראות סטטיסטיקות ניצחונות."},
         {b:"מה בא ללמד?", t:"איך אסטרטגיה משפיעה על תוצאות לאורך זמן — ולמה אגרסיביות לא תמיד מנצחת."},
         {b:"למה הוא פה?", t:"כדי לראות פוקר 'מבחוץ' ולהבין דפוסים בלי לקחת החלטות בעצמך."},
-      ]},
-    analyst: {
-      title:"📊 דו״ח אנליסט",
-      items:[
-        {b:"מה זה?", t:"מסך ניתוח עומק של יד פוקר אחת — שלב אחר שלב, החלטה אחר החלטה."},
-        {b:"מה מראה?", t:"4 אקורדיונים (פרה-פלופ/פלופ/טרן/ריבר). בכל שלב: השוואה בין הפעולה שלך להמלצה האנליסטית, אקוויטי, $EV, פירוט מה גובר עלייך + אילו קלפים ספציפיים."},
-        {b:"מה בא ללמד?", t:"חשיבה מתמטית על פוקר. למה החלטה מסוימת הייתה נכונה או שגויה, ומה ההסתברות שהיריב היה מנצח אותך."},
-        {b:"למה הוא פה?", t:"לראות יד שלך בעיניים של מנתח מקצועי — לא רק 'מה קרה' אלא 'מה היה צפוי לקרות'."},
       ]},
   };
 
@@ -2465,7 +2446,6 @@ export default function PokerTutor() {
         <MenuCard id="comparison" icon="🥊" title="מי מנצח?" subtitle="קל לקשה" color="#27ae60" accent="rgba(39,174,96,0.3)"/>
         <MenuCard id="whatbeats" icon="⚔️" title="מה לוקח מה?" subtitle="ויזואלי + קלפים"/>
         <MenuCard id="math" icon="🧮" title="הסתברות פוקר" subtitle="אאוטס · כלל ה-4 · Pot Odds" color="#3498db" accent="rgba(52,152,219,0.3)" fullWidth/>
-        <MenuCard id="analyst" icon="📊" title="דו״ח אנליסט" subtitle="ניתוח יד מלא · אקוויטי · EV · מה גובר עלייך" color="#c9a84c" accent="rgba(201,168,76,0.4)" fullWidth/>
       </div>
 
       {/* Section 3: משחק */}

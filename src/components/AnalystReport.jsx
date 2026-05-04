@@ -58,13 +58,20 @@ const TERM_DEFS_AR = {
 // ===== Card helpers =====
 const SUIT_SYM = { s:'♠', h:'♥', d:'♦', c:'♣' };
 const SUIT_COLOR = { s:'#1a1a1a', c:'#1a1a1a', h:'#c0392b', d:'#c0392b' };
+// Reverse map for "K♠" → "s" so we accept both internal formats.
+const SYM_TO_SUIT = { '♠':'s', '♥':'h', '♦':'d', '♣':'c' };
 function parseCard(c) {
   if(!c || typeof c!=='string' || c.length<2) return null;
-  const suit = c.slice(-1).toLowerCase();
-  return { rank: c.slice(0,-1).toUpperCase(), suit, sym: SUIT_SYM[suit]||'?', color: SUIT_COLOR[suit]||'#000' };
+  const last = c.slice(-1);
+  let suit;
+  // Format "K♠" — last char is a unicode suit symbol
+  if(SYM_TO_SUIT[last]) suit = SYM_TO_SUIT[last];
+  // Format "Ks" — last char is a letter
+  else suit = last.toLowerCase();
+  return { rank: c.slice(0,-1).toUpperCase(), suit, sym: SUIT_SYM[suit]||last, color: SUIT_COLOR[suit]||'#000' };
 }
 
-// ===== DEMO DATA — היד מהסקרינים: T♦7♠ vs 6♠5♥, board KsK7h5sKcJs, ended in tie =====
+// ===== DEMO DATA — fallback אם לא נשלחו props אמיתיים =====
 const DEMO_HAND = {
   handId:'#001',
   playerCards:['Td','7s'],
@@ -76,6 +83,204 @@ const DEMO_HAND = {
 const STREET_ORDER = ['preflop','flop','turn','river'];
 const STREET_LABELS = { preflop:'פרה-פלופ', flop:'פלופ', turn:'טרן', river:'ריבר' };
 const STREET_BOARD_COUNT = { preflop:0, flop:3, turn:4, river:5 };
+
+// ============================================================================
+// buildStreetsFromHand — translator: real game data → streets data structure
+// ============================================================================
+// Input:
+//   playerHand: ["K♠","2♥"]  (rank+suit format)
+//   community:  ["K♠","7♥","5♠","K♣","J♠"]  (up to 5)
+//   actions:    [{action:"call", round:"preflop"}, ...]
+//   resultData: { won, tied, type:"fold"|"showdown", pe, be }  // pe=playerEval, be=botEval
+//   reachedStage: "preflop"|"flop"|"turn"|"river"|"showdown"
+//   evaluators: { analyzeContext } — passed in to avoid circular dep
+// Output: streets object compatible with AnalystReport
+// ----------------------------------------------------------------------------
+export function buildStreetsFromHand({ playerHand, community, actions, resultData, reachedStage, analyzeContext }) {
+  const streets = {};
+  const stageBoardLen = { preflop:0, flop:3, turn:4, river:5 };
+  const stageOrder = ['preflop','flop','turn','river'];
+  const reachedIdx = stageOrder.indexOf(reachedStage === 'showdown' ? 'river' : reachedStage);
+
+  for(const stage of stageOrder) {
+    const stageIdx = stageOrder.indexOf(stage);
+    if(stageIdx > reachedIdx && reachedStage !== 'showdown') {
+      // השלב לא הגיע — לא מציגים אותו (אקורדיון יראה אבל יהיה ריק)
+      streets[stage] = null;
+      continue;
+    }
+
+    const visibleBoard = community.slice(0, stageBoardLen[stage]);
+    const ctx = analyzeContext(playerHand, visibleBoard);
+    const action = actions.find(a => a.round === stage);
+    streets[stage] = buildStageData({ stage, playerHand, visibleBoard, ctx, action, resultData });
+  }
+
+  return streets;
+}
+
+// Build a single stage entry
+function buildStageData({ stage, playerHand, visibleBoard, ctx, action, resultData }) {
+  const playerDecision = action ? ACTION_LABELS[action.action] : '—';
+  const { recommendation, isCorrect, reasonText } = analyzeDecision({ stage, ctx, action });
+
+  // Equity: ctx.strength is 0–100 — use as approximation of win chance
+  // (לא Monte Carlo אמיתי, אבל heuristic סביר על בסיס strength)
+  const equityPct = Math.max(15, Math.min(92, Math.round(ctx.strength)));
+  const losePct = 100 - equityPct;
+  const warn = equityPct < 50;
+
+  // EV very rough heuristic — סימן ועוצמה לפי strength + action
+  const evResult = computeEV({ ctx, action, stage, equityPct });
+
+  // Hand rank from analyzeContext
+  const rankResult = ctx.current.name;
+
+  return {
+    playerDecision,
+    analystDecision: recommendation,
+    isCorrect,
+    reasonText, // string, will be rendered with simple text (no Term components)
+    handStr: playerHand.join(' '),
+    boardStr: visibleBoard.join(' '),
+    metrics: {
+      equity: { result: `${equityPct}%`, winPct: `${equityPct}%`, losePct: `${losePct}%`, warn, isShowdown: stage==='river' && resultData?.type!=='fold' },
+      ev:   { result: evResult.label, formula: evResult.formula, detail: evResult.detail, value: evResult.label },
+      rank: { result: rankResult, detail: ctx.potential || '—' },
+    },
+    // Loss breakdown is generated dynamically based on hand strength category
+    breakdown: buildBreakdown({ stage, ctx, playerHand, visibleBoard }),
+  };
+}
+
+const ACTION_LABELS = {
+  fold:  'Fold (פולד)',
+  call:  'Call (קול)',
+  raise: 'Raise (רייז)',
+  check: 'Check (צ׳ק)',
+};
+
+// ----------------------------------------------------------------------------
+// analyzeDecision — for each stage, given ctx and action, what should be done
+// ----------------------------------------------------------------------------
+function analyzeDecision({ stage, ctx, action }) {
+  if(!action) {
+    return { recommendation: '—', isCorrect: true, reasonText: 'לא בוצעה פעולה בשלב זה.' };
+  }
+  const a = action.action;
+  const s = ctx.strength;
+  const handName = ctx.current.name;
+
+  // Pre-flop logic — based on hand strength
+  if(stage === 'preflop') {
+    if(s >= 60) {
+      if(a === 'raise') return { recommendation:'Raise (רייז) ✓', isCorrect:true, reasonText:`עם ${handName} (יד חזקה) — רייז בפרה-פלופ הוא הצעד הנכון. בונה את הסיר מוקדם וצמצם יריבים שעלולים לפגוע בלוח.` };
+      if(a === 'call')  return { recommendation:'Raise (רייז)', isCorrect:false, reasonText:`עם ${handName} (יד חזקה כל-כך), רייז היה עדיף על קול. קול מאפשר לכל היריבים להיכנס בזול ופותח לוח לא צפוי.` };
+      return { recommendation:'Raise (רייז)', isCorrect:false, reasonText:`פולד עם ${handName} זה ויתור על אחת הידיים החזקות שיכולות להגיע. רייז כמעט תמיד.` };
+    }
+    if(s >= 30) {
+      if(a === 'call')  return { recommendation:'Call (קול) ✓', isCorrect:true, reasonText:`יד בינונית (${handName}) מתאימה לקול — לראות פלופ בזול ולא להתחייב יותר מדי.` };
+      if(a === 'raise') return { recommendation:'Call (קול)', isCorrect:false, reasonText:`רייז עם יד בינונית (${handName}) זה אגרסיבי מדי לפני שיש מידע על הלוח. קול בטוח יותר.` };
+      return { recommendation:'Call (קול)', isCorrect:false, reasonText:`עם יד בינונית (${handName}) שווה לראות את הפלופ — אין סיבה לפולד מוקדם.` };
+    }
+    // Weak preflop hand
+    if(a === 'fold')  return { recommendation:'Fold (פולד) ✓', isCorrect:true, reasonText:`עם יד חלשה כזו (${handName}) — פולד הוא חבר. חיסכון = רווח. אין סיבה לסכן כסף עם פוטנציאל נמוך.` };
+    if(a === 'call')  return { recommendation:'Fold (פולד)', isCorrect:false, reasonText:`קול ביד חלשה (${handName}) מזמין סיר ארוך עם יד שולית. גם אם תפגעי בזוג, הוא לרוב יהיה מתחת ליד היריב.` };
+    return { recommendation:'Fold (פולד)', isCorrect:false, reasonText:`רייז ביד חלשה זה בלוף יקר ללא בק-אפ. מסתיים לרוב בהפסד.` };
+  }
+
+  // Post-flop — generic: strength-based
+  if(s >= 65) {
+    if(a === 'raise') return { recommendation:'Raise (רייז) ✓', isCorrect:true, reasonText:`עם ${handName} (יד חזקה) — רייז מקבל ערך מיריבים חלשים יותר.` };
+    if(a === 'call')  return { recommendation:'Raise (רייז)', isCorrect:false, reasonText:`עם ${handName}, רייז היה מקבל יותר ערך. קול פסיבי בעיקר עם יד חזקה כל-כך.` };
+    return { recommendation:'Raise (רייז)', isCorrect:false, reasonText:`פולד עם ${handName} זה לוותר על יד מנצחת. כמעט תמיד יש כאן ערך.` };
+  }
+  if(s >= 40) {
+    if(a === 'call')  return { recommendation:'Call (קול) ✓', isCorrect:true, reasonText:`עם ${handName} (יד סבירה) — קול מאפשר לראות את הקלף הבא בלי להתחייב יותר מדי.` };
+    if(a === 'check') return { recommendation:'Check (צ׳ק) ✓', isCorrect:true, reasonText:`צ׳ק עם ${handName} זה תמרון נכון — שולטת בגודל הסיר ומגלה מידע על היריב.` };
+    if(a === 'raise') return { recommendation:'Call (קול)', isCorrect:false, reasonText:`רייז עם ${handName} (יד בינונית) — נועז. שווה לראות עוד קלף לפני שמסלימה את הסיר.` };
+    return { recommendation:'Call (קול)', isCorrect:false, reasonText:`פולד עם ${handName} ופוטנציאל לשיפור — מוקדם מדי. שווה עוד קלף.` };
+  }
+  // Weak post-flop
+  if(a === 'fold')  return { recommendation:'Fold (פולד) ✓', isCorrect:true, reasonText:`עם ${handName} (יד חלשה) — פולד נכון. אין סיבה להמשיך להשקיע.` };
+  if(a === 'check') return { recommendation:'Check (צ׳ק) ✓', isCorrect:true, reasonText:`צ׳ק עם ${handName} — חוסך כסף, מאפשר לראות עוד קלף בחינם.` };
+  if(a === 'call')  return { recommendation:'Fold (פולד)', isCorrect:false, reasonText:`עם ${handName} בלי דרא — קול הוא לרוב הפסד. שווה לפולד.` };
+  return { recommendation:'Fold (פולד)', isCorrect:false, reasonText:`רייז עם ${handName} זה בלוף יקר — אם היריב לא יפולד, את בצרות.` };
+}
+
+// ----------------------------------------------------------------------------
+function computeEV({ ctx, action, stage, equityPct }) {
+  // Heuristic EV (לא חישוב אמיתי) — אבל נותן סימן ועוצמה הגיוניים
+  const a = action?.action;
+  const equity = equityPct / 100;
+
+  if(a === 'fold')  return { label: '$0.00', formula:'EV(Fold) = 0', detail:'פולד = ויתור על הסיר. אין השקעה נוספת ואין סיכוי לזכייה.' };
+  if(a === 'check') {
+    const v = (equity * 0.5).toFixed(2);
+    return { label: `+$${v}`, formula:'EV(Check) = 0 ישיר\n+ ערך מידע (Information Value)', detail:'צ׳ק לא עולה כסף ומאפשר לראות עוד קלף. ערך תלוי בכמה אקוויטי יש.' };
+  }
+  // call / raise
+  const cost = a === 'raise' ? 60 : 20;
+  const win = a === 'raise' ? 100 : 60;
+  const ev = (equity * win - (1-equity) * cost).toFixed(2);
+  const label = parseFloat(ev) >= 0 ? `+$${ev}` : `-$${Math.abs(ev).toFixed(2)}`;
+  const sign = parseFloat(ev) >= 0 ? 'רווחי' : 'מפסיד';
+  return {
+    label,
+    formula: `EV = (${equityPct}% × $${win}) − (${100-equityPct}% × $${cost})\n   = $${(equity*win).toFixed(2)} − $${((1-equity)*cost).toFixed(2)}\n   = $${ev}`,
+    detail: `${a==='raise'?'רייז':'קול'} עולה $${cost}. עם ${equityPct}% אקוויטי — ${sign} בטווח הארוך.`,
+  };
+}
+
+// ----------------------------------------------------------------------------
+// buildBreakdown — generate "what beats your hand" list per stage based on ctx
+// ----------------------------------------------------------------------------
+function buildBreakdown({ stage, ctx, playerHand, visibleBoard }) {
+  const items = [];
+  const s = ctx.strength;
+  const handName = ctx.current.name;
+
+  // Pre-flop — uses ranks of hole cards
+  if(stage === 'preflop') {
+    if(s < 35) {
+      // Weak hand
+      items.push({ title:'זוג כיס גבוה', pct:'~5% מהידיים', detail:'88, 99, TT, JJ, QQ, KK, AA — יד בעלת זוג מובנה גוברת על קלפים גבוהים. underdog של ~80%.' });
+      items.push({ title:'שני קלפים גבוהים', pct:'~6% מהידיים', detail:'AK, AQ, AJ, KQ, KJ, QJ — שני קלפים שיכולים להפוך לזוג גבוה. underdog של 60-65%.' });
+      items.push({ title:'דומיננטיות (kicker חזק יותר)', pct:'~7% מהידיים', detail:'אם ליריב יש קלף שלך אבל kicker יותר טוב — גם אם תזכי בזוג, הוא ינצח.' });
+      items.push({ title:'קלף גבוה אחד', pct:'~30% מהידיים', detail:'כל יד עם A, K, Q או J. underdog של 52-58%.' });
+      items.push({ positive:true, title:'ידיים שאת favorite מולן', pct:'~52% מהידיים', detail:'קלפים נמוכים יותר משלך — שם את לרוב מובילה. אבל הסך מטה את האקוויטי.' });
+    } else if(s < 60) {
+      items.push({ title:'זוג כיס גבוה משלך', pct:'~3% מהידיים', detail:'זוגות גבוהים יותר מהקלף הגבוה ביד שלך — overpair.' });
+      items.push({ title:'AK, AQ, AJ', pct:'~4% מהידיים', detail:'broadway hands עם פוטנציאל גבוה לזוג.' });
+      items.push({ positive:true, title:'רוב הידיים האפשריות', pct:'~70% מהידיים', detail:'עם יד בינונית את עדיין לפני רוב הידיים האקראיות.' });
+    } else {
+      items.push({ title:'זוג כיס גבוה משלך', pct:'~1% מהידיים', detail:'רק זוגות גבוהים מאוד יכולים לעקוף יד פרימיום.' });
+      items.push({ positive:true, title:'כמעט כל יד אחרת', pct:'~85% מהידיים', detail:'את עם יד פרימיום — favorite מול הרוב המכריע.' });
+    }
+    return items;
+  }
+
+  // Post-flop — based on what completed hand is
+  const drawText = ctx.drawFlush ? 'דרא לפלאש' : ctx.drawStraight ? 'דרא לסטרייט' : null;
+
+  if(s < 35) {
+    items.push({ title:'כל זוג ביד היריב', pct:'מאוד שכיח', detail:`עם ${handName} כל זוג של היריב גובר עלייך. רק שיפור בקלף הבא יציל אותך.` });
+    if(drawText) items.push({ positive:true, title:'יש לך ' + drawText, pct:'~30-35% להשלים', detail:'עוד יש פוטנציאל אם תפגעי בקלף הנכון.' });
+    items.push({ title:'כל יד עם זוג מהלוח + kicker גבוה', pct:'שכיח', detail:'גם בלי יד "אמיתית", היריב יכול לקבל זוג מהקלפים הקהילתיים.' });
+  } else if(s < 60) {
+    items.push({ title:'זוג עליון יותר', pct:'~20% מהידיים', detail:`עם ${handName}, זוג גבוה יותר על הלוח גובר.` });
+    items.push({ title:'שני זוגות', pct:'~6% מהידיים', detail:'אם ליריב 2 קלפים שמתחברים ללוח — שני זוגות מנצחים.' });
+    items.push({ title:'שלישייה / set', pct:'~3% מהידיים', detail:'יריב עם זוג כיס שמתחבר לקלף בלוח — אסון.' });
+    if(drawText) items.push({ title:`יריב עם ${drawText}`, pct:'~10-15%', detail:'גם אם הוא מאחורייך עכשיו, סיכוי לסגור.' });
+    items.push({ positive:true, title:'ידיים שאת מובילה', pct:`~${100 - Math.round(s/2)}% מהידיים`, detail:'הרוב — יד שלך מספיק חזקה.' });
+  } else {
+    items.push({ title:'יד גבוהה יותר באותה קטגוריה', pct:'~10% מהידיים', detail:`למרות ${handName} יד חזקה, יריב עם kicker יותר טוב או עם אותו צירוף בערכים גבוהים יותר עדיין מנצח.` });
+    items.push({ title:'צירוף יותר חזק (full house, flush)', pct:'~5% מהידיים', detail:'נדיר אבל אפשרי — שווה לוודא שהלוח לא מאיים.' });
+    items.push({ positive:true, title:'ידיים שאת מובילה', pct:`~${Math.round(s)}% מהידיים`, detail:'יד חזקה — favorite ברורה מול רוב הידיים.' });
+  }
+
+  return items;
+}
 
 // ===== Sub-components =====
 function MiniCard({ card }) {
@@ -127,56 +332,13 @@ function TermModal({ termKey, onClose }) {
   );
 }
 
-// ===== Streets data builder (לדמו — נתונים סטטיים על היד מהסקרינים) =====
-const STREETS_DATA = {
-  preflop: {
-    playerDecision:'Call', analystDecision:'Fold ✓', isCorrect:false,
-    reasonNode: (
-      <>T♦7♠ <Term k="offsuit">offsuit</Term> היא יד חלשה — שני קלפים שלא מתחברים, ללא צמד וללא <Term k="suit">suit</Term> משותף. ה-<Term k="kicker">kicker</Term> נמוך מדי כדי לתת לקלף הגבוה ערך, וה-<Term k="call">call</Term> כאן מזמין אותך ל<Term k="long-pot">סיר ארוך</Term> עם <Term k="marginal-hand">יד שולית</Term>.</>
-    ),
-    metrics: {
-      equity:{ result:'38%', winPct:'38%', losePct:'62%', warn:true },
-      ev:{ result:'-1.20$' },
-      rank:{ result:'High' },
-    },
-  },
-  flop: {
-    playerDecision:'Check', analystDecision:'Check', isCorrect:true,
-    reasonNode: (
-      <>הפלופ נתן לך <Term k="one-pair">זוג</Term> שביעיות (זוג בינוני) על ה<Term k="board">לוח</Term> עם K גבוה. <Term k="check">Check</Term> נכון — אין ערך ב<Term k="raise">רייז</Term> עם זוג נמוך מהקלף הגבוה בלוח, אבל היד עדיין שווה לראות עוד קלף.</>
-    ),
-    metrics: {
-      equity:{ result:'48%', winPct:'48%', losePct:'52%', warn:true },
-      ev:{ result:'+0.40$' },
-      rank:{ result:'Pair (7s)' },
-    },
-  },
-  turn: {
-    playerDecision:'Call', analystDecision:'Call', isCorrect:true,
-    reasonNode: (
-      <>הטרן הביא K נוסף — עכשיו יש לך <Term k="two-pair">שני זוגות</Term> (KK + 77). שיפור משמעותי. אבל זהירות: KK על הלוח אומר שגם ליריב יש את הזוג הזה. אם יש לו K ביד — יש לו <Term k="trips">trips</Term>. <Term k="call">Call</Term> ולא <Term k="raise">raise</Term>.</>
-    ),
-    metrics: {
-      equity:{ result:'72%', winPct:'72%', losePct:'28%', warn:false },
-      ev:{ result:'+8.60$' },
-      rank:{ result:'Two Pair' },
-    },
-  },
-  river: {
-    playerDecision:'Check', analystDecision:'Check', isCorrect:true,
-    reasonNode: (
-      <><InlineCard card="Js"/> הביא 3 ספייד ללוח — אם ליריב 2 ספייד, יש לו <Term k="flush">פלאש</Term> שגובר על <Term k="two-pair">שני זוגות</Term>. KK77 שלך עדיין יד טובה אבל לא מספיק חזקה ל-<Term k="value-bet">value bet</Term>. <Term k="check">Check</Term> והגענו ל-<Term k="showdown">showdown</Term>.</>
-    ),
-    metrics: {
-      equity:{ result:'50%', winPct:'50%', losePct:'~55%', warn:false, isShowdown:true },
-      ev:{ result:'+60$' },
-      rank:{ result:'Two Pair' },
-    },
-  },
-};
+// ===== Streets data — מבוטל. כעת מגיע מ-props. =====
 
 // ===== Main Component =====
-export default function AnalystReport({ onExit, hand=DEMO_HAND }) {
+export default function AnalystReport({ onExit, hand=DEMO_HAND, streets: streetsProp=null }) {
+  // אם לא נשלחו streets מבחוץ — fallback לדמו הסטטי (היד T♦7♠ מההסקרינים)
+  const streets = streetsProp || DEMO_STREETS_FALLBACK;
+
   const [activeStreet, setActiveStreet] = useState('preflop');
   const [activeMetric, setActiveMetric] = useState({preflop:'equity'});
   const [termKey, setTermKey] = useState(null);
@@ -228,17 +390,21 @@ export default function AnalystReport({ onExit, hand=DEMO_HAND }) {
         </div>
 
         {STREET_ORDER.map(streetKey => {
-          const data = STREETS_DATA[streetKey];
+          const data = streets[streetKey];
           const isActive = activeStreet === streetKey;
           const visibleBoard = hand.boardCards.slice(0, STREET_BOARD_COUNT[streetKey]);
           const currentMetric = activeMetric[streetKey] || null;
 
+          // אקורדיון לא לחיץ אם אין נתונים (השלב לא הגיע)
+          const hasData = !!data;
+
           return (
-            <div key={streetKey} className={`ar-acc ${isActive?'active':''}`}>
-              <button className="ar-acc-head" onClick={()=>toggleStreet(streetKey)}>
+            <div key={streetKey} className={`ar-acc ${isActive?'active':''} ${!hasData?'ar-acc-disabled':''}`}>
+              <button className="ar-acc-head" onClick={()=>hasData && toggleStreet(streetKey)} disabled={!hasData}>
                 <div className="ar-acc-head-label">
                   <span className="ar-chevron">›</span>
                   <span className="ar-street-name">{STREET_LABELS[streetKey]}</span>
+                  {!hasData && <span className="ar-stage-not-reached">לא הגעת לשלב הזה</span>}
                 </div>
                 <div className="ar-thumbs">
                   {[0,1,2,3,4].map(i => (
@@ -249,12 +415,13 @@ export default function AnalystReport({ onExit, hand=DEMO_HAND }) {
                 </div>
               </button>
 
-              {isActive && (
+              {isActive && hasData && (
                 <div className="ar-acc-body">
                   <DecisionRow data={data}/>
                   <div className="ar-reason">
                     <span className="ar-reason-label">הסיבה: </span>
-                    {data.reasonNode}
+                    {/* Render reasonText with auto-detected terms (from existing TERM_DEFS_AR keys) */}
+                    <ReasonText text={data.reasonText}/>
                   </div>
 
                   <div className="ar-metrics-row">
@@ -269,9 +436,9 @@ export default function AnalystReport({ onExit, hand=DEMO_HAND }) {
                                 onClick={()=>toggleMetric(streetKey,'rank')}/>
                   </div>
 
-                  {currentMetric==='equity' && <EquityPanel street={streetKey} data={data.metrics.equity}/>}
-                  {currentMetric==='ev' && <EVPanel street={streetKey}/>}
-                  {currentMetric==='rank' && <RankPanel street={streetKey}/>}
+                  {currentMetric==='equity' && <EquityPanel street={streetKey} data={data.metrics.equity} breakdown={data.breakdown} handStr={data.handStr}/>}
+                  {currentMetric==='ev'     && <EVPanel data={data.metrics.ev}/>}
+                  {currentMetric==='rank'   && <RankPanel data={data.metrics.rank}/>}
                 </div>
               )}
             </div>
@@ -283,6 +450,68 @@ export default function AnalystReport({ onExit, hand=DEMO_HAND }) {
     </div>
   );
 }
+
+// Auto-highlight known terms in reason text (heuristic — Hebrew + English keys map to terms)
+const TERM_INLINE_MAP = {
+  'offsuit':'offsuit', 'kicker':'kicker', 'suit':'suit',
+  'fold':'fold', 'call':'call', 'raise':'raise', 'check':'check',
+  'underdog':'underdog', 'favorite':'favorite', 'dominated':'dominated',
+  'flush':'flush', 'overpair':'overpair', 'set':'set', 'trips':'trips',
+  'two pair':'two-pair', 'value bet':'value-bet', 'showdown':'showdown',
+  'pot odds':'pot-odds', 'implied odds':'implied-odds', 'variance':'variance',
+  'יד שולית':'marginal-hand', 'סיר ארוך':'long-pot', 'סיר':'pot',
+  'פולד':'fold', 'קול':'call', 'רייז':'raise', 'צ׳ק':'check',
+  'זוג כיס':'pocket-pair', 'זוג עליון':'top-pair', 'שני זוגות':'two-pair',
+  'דרא לפלאש':'flush-draw', 'דרא':'draw', 'אאוטס':'outs',
+  'פוט אודס':'pot-odds', 'פלאש':'flush', 'אקוויטי':'equity',
+  'בלוף':'value-bet', 'בק-אפ':'draw',
+};
+function ReasonText({ text }) {
+  if(!text) return null;
+  // Build sorted list of phrases (longest first to avoid sub-matches)
+  const phrases = Object.keys(TERM_INLINE_MAP).sort((a,b)=>b.length-a.length);
+  const parts = [];
+  let remaining = text;
+  let safety = 0;
+  while(remaining.length > 0 && safety++ < 200) {
+    let foundIdx = -1, foundPhrase = null;
+    for(const p of phrases) {
+      const i = remaining.toLowerCase().indexOf(p.toLowerCase());
+      if(i !== -1 && (foundIdx === -1 || i < foundIdx)) {
+        foundIdx = i;
+        foundPhrase = p;
+      }
+    }
+    if(foundIdx === -1) { parts.push(remaining); break; }
+    if(foundIdx > 0) parts.push(remaining.slice(0, foundIdx));
+    const original = remaining.slice(foundIdx, foundIdx + foundPhrase.length);
+    parts.push(<Term key={parts.length} k={TERM_INLINE_MAP[foundPhrase]}>{original}</Term>);
+    remaining = remaining.slice(foundIdx + foundPhrase.length);
+  }
+  return <>{parts.map((p,i) => typeof p === 'string' ? <span key={i}>{p}</span> : p)}</>;
+}
+
+// ===== Fallback demo data (used only when no streets prop passed) =====
+const DEMO_STREETS_FALLBACK = {
+  preflop: {
+    playerDecision:'Call (קול)', analystDecision:'Fold (פולד) ✓', isCorrect:false,
+    reasonText: 'T♦7♠ offsuit היא יד חלשה — שני קלפים שלא מתחברים, ללא צמד וללא suit משותף. ה-kicker נמוך מדי כדי לתת לקלף הגבוה ערך, וה-call כאן מזמין אותך לסיר ארוך עם יד שולית.',
+    handStr: 'T♦ 7♠',
+    metrics: {
+      equity:{ result:'38%', winPct:'38%', losePct:'62%', warn:true },
+      ev:{ result:'-1.20$', formula:'EV = (38% × $20) − (62% × $20)\n   = $7.60 − $12.40\n   = -$4.80', detail:'pot odds מצדיקים בקושי, reverse implied odds משלימים.' },
+      rank:{ result:'High Card', detail:'אין צירוף — הקלף הגבוה (10) בלבד.' },
+    },
+    breakdown: [
+      { title:'זוג כיס גבוה', pct:'~5% מהידיים', detail:'88, 99, TT, JJ, QQ, KK, AA — underdog של ~80%.' },
+      { title:'שני קלפים גבוהים מ-10', pct:'~6% מהידיים', detail:'AK, AQ, AJ, KQ, KJ, QJ — underdog של 60-65%.' },
+      { title:'דומיננטיות (kicker חזק יותר)', pct:'~7% מהידיים', detail:'AT, KT, QT, JT, A7, K7, Q7, J7 — את dominated.' },
+      { title:'קלף גבוה אחד', pct:'~30% מהידיים', detail:'A, K, Q או J עם kicker סביר. underdog של 52-58%.' },
+      { positive:true, title:'ידיים שאת favorite מולן', pct:'~52% מהידיים', detail:'קלפים נמוכים שלא חופפים אליך.' },
+    ],
+  },
+  // (השלבים האחרים יתגלגלו מ-buildStreetsFromHand — fallback לא חובה)
+};
 
 function DecisionRow({ data }) {
   const playerTone = data.isCorrect ? 'positive' : 'negative';
@@ -310,8 +539,8 @@ function MetricPill({ label, result, active, onClick }) {
   );
 }
 
-// ===== Equity panels (per-street, with rich loss breakdown) =====
-function EquityPanel({ street, data }) {
+// ===== Equity panel — דינמי על בסיס breakdown מהשלב =====
+function EquityPanel({ street, data, breakdown=[], handStr }) {
   return (
     <div className="ar-panel">
       <div className="ar-stats-row">
@@ -320,150 +549,24 @@ function EquityPanel({ street, data }) {
           <div className="ar-stat-value">{data.winPct}</div>
         </div>
         <div className={`ar-stat ${data.warn ? 'warn' : 'lose'}`}>
-          <div className="ar-stat-label">{data.isShowdown ? 'תיאורטי לפני חשיפה' : 'סיכוי הפסד ⚠️'}</div>
+          <div className="ar-stat-label">{data.warn ? 'סיכוי הפסד ⚠️' : 'סיכוי הפסד'}</div>
           <div className="ar-stat-value">{data.losePct}</div>
         </div>
       </div>
 
-      {street==='preflop' && (
-        <>
-          <div className="ar-warning-banner">⚠️ את <Term k="underdog">underdog</Term> ברוב המקרים — שקלי <Term k="fold">fold</Term>!</div>
-          <div className="ar-breakdown-title">מה מנצח את T♦7♠ פרה-פלופ:</div>
-          <ul className="ar-breakdown">
-            <BreakdownItem
-              title={<><Term k="pocket-pair">זוג כיס</Term> גבוה</>}
-              pct="~5% מהידיים"
-              detail={<>הידיים: <strong>88, 99, TT, JJ, QQ, KK, AA</strong> — את <Term k="underdog">underdog</Term> של ~80%. תרחיש קטסטרופלי.</>}
-            />
-            <BreakdownItem
-              title="שני קלפים גבוהים מ-10"
-              pct="~6% מהידיים"
-              detail={<><strong>AK, AQ, AJ, KQ, KJ, QJ</strong> — שני קלפים שיכולים להפוך לזוג גבוה. <Term k="underdog">underdog</Term> של 60-65%.</>}
-            />
-            <BreakdownItem
-              title={<><Term k="dominated">דומיננטיות</Term> (קלף שלך + <Term k="kicker">kicker</Term> חזק)</>}
-              pct="~7% מהידיים"
-              detail={<>ידיים שמכילות <strong>T או 7 עם <Term k="kicker">kicker</Term> גבוה משלך</strong>: AT, KT, QT, JT, A7, K7, Q7, J7. את <Term k="dominated">dominated</Term>.</>}
-            />
-            <BreakdownItem
-              title={<>קלף גבוה אחד עם <Term k="kicker">kicker</Term> סביר</>}
-              pct="~30% מהידיים"
-              detail={<>כל יד עם A, K, Q או J ו-<Term k="kicker">kicker</Term> בטווח הביניים. <Term k="underdog">underdog</Term> של 52-58%.</>}
-            />
-            <BreakdownItem positive
-              title={<>ידיים שאת <Term k="favorite">favorite</Term> מולן</>}
-              pct="~52% מהידיים"
-              detail={<>קלפים נמוכים שלא חופפים אליך. אבל הסך מטה את ה<Term k="equity">אקוויטי</Term> ל-38%.</>}
-            />
-          </ul>
-        </>
+      {data.warn && (
+        <div className="ar-warning-banner">
+          ⚠️ את <Term k="underdog">underdog</Term> ברוב המקרים — שקלי <Term k="fold">fold</Term>!
+        </div>
       )}
 
-      {street==='flop' && (
+      {breakdown.length > 0 && (
         <>
-          <div className="ar-warning-banner">⚠️ <Term k="coin-flip">Coin flip</Term> עם נטייה קלה לרעתך</div>
-          <div className="ar-breakdown-title">מה גובר על <Term k="one-pair">זוג</Term> שביעיות:</div>
+          <div className="ar-breakdown-title">מה גובר על {handStr || 'היד'}:</div>
           <ul className="ar-breakdown">
-            <BreakdownItem
-              title={<>ליריב יש K (<Term k="top-pair">זוג עליון</Term>)</>}
-              pct="~24% מהידיים"
-              detail={<>Kings שנותרו: <InlineCard card="Kh"/> <InlineCard card="Kd"/> <InlineCard card="Kc"/>. <Term k="top-pair">זוג עליון</Term> מלכים. <Term k="underdog">underdog</Term> של ~80% (יש לך 5 <Term k="outs">outs</Term> ל-<Term k="trips">trips</Term> או <Term k="two-pair">two pair</Term>).</>}
-            />
-            <BreakdownItem
-              title={<><Term k="pocket-pair">זוג כיס</Term> גבוה מ-7</>}
-              pct="~3% מהידיים"
-              detail={<><strong>88, 99, TT, JJ, QQ, AA</strong>. <Term k="overpair">Overpair</Term> מוביל אותך נטו.</>}
-            />
-            <BreakdownItem
-              title={<><Term k="set">Set</Term> (<Term k="pocket-pair">זוג כיס</Term> שמתחבר ללוח)</>}
-              pct="פחות מ-1%"
-              detail={<>פוקט 55 → <Term k="set">set</Term> של חמישיות. נדיר אבל קטלני — <Term k="underdog">underdog</Term> של ~95%.</>}
-            />
-            <BreakdownItem
-              title={<><Term k="flush-draw">דרא לפלאש</Term> (2 ספייד ביד היריב)</>}
-              pct="~10% מהידיים"
-              detail={<>על הלוח 2 ספייד (<InlineCard card="Ks"/><InlineCard card="5s"/>). 2 ספייד נוספים → <Term k="flush-draw">flush draw</Term> עם ~36% להשלים.</>}
-            />
-            <BreakdownItem positive
-              title="ידיים שאת לפחות מובילה"
-              pct="~63% מהידיים"
-              detail={<>כל יד שלא מכילה K, לא <Term k="pocket-pair">זוג כיס</Term> גבוה ולא <Term k="draw">דרא</Term>.</>}
-            />
-          </ul>
-        </>
-      )}
-
-      {street==='turn' && (
-        <>
-          <div className="ar-breakdown-title">מה יכול לגבור על KK + 77:</div>
-          <ul className="ar-breakdown">
-            <BreakdownItem
-              title={<>ליריב יש K (<Term k="trips">Trips</Term> Kings)</>}
-              pct="~9% מהידיים"
-              detail={<>Kings שנותרו: <InlineCard card="Kh"/> <InlineCard card="Kd"/>. KKK + 77 = <Term k="full-house">full house</Term>.</>}
-            />
-            <BreakdownItem
-              title={<>ליריב יש 7 (<Term k="full-house">Full House</Term>)</>}
-              pct="~9% מהידיים"
-              detail={<>7s שנותרו: <InlineCard card="7c"/> <InlineCard card="7d"/>. עם 7 ביד — תיקו. רק עם שני 7s → <Term k="full-house">full house</Term> אמיתי.</>}
-            />
-            <BreakdownItem
-              title={<><Term k="pocket-pair">זוג כיס</Term> מ-8 ומעלה</>}
-              pct="~3% מהידיים"
-              detail={<><strong>88, 99, TT, JJ, QQ</strong>. KK + (8-Q) עדיף על KK + 77.</>}
-            />
-            <BreakdownItem
-              title={<><Term k="flush-draw">דרא לפלאש</Term> שמשלים בריבר</>}
-              pct="~7% מהידיים"
-              detail={<>על הלוח 2 ספייד. 2 ספייד ביד יריב → <Term k="flush-draw">flush draw</Term> עם ~20% להשלים.</>}
-            />
-            <BreakdownItem positive
-              title="ידיים שאת מובילה מולן"
-              pct="~72% מהידיים"
-              detail={<>הרוב המוחלט — <Term k="two-pair">שני זוגות</Term> KK77 לוקחת את ה<Term k="pot">סיר</Term>.</>}
-            />
-          </ul>
-        </>
-      )}
-
-      {street==='river' && (
-        <>
-          <div className="ar-breakdown-title">מה היה מנצח את KK + 77:</div>
-          <ul className="ar-breakdown">
-            <BreakdownItem
-              title={<>ליריב K (<Term k="trips">Trips</Term> Kings)</>}
-              pct="~9%"
-              detail={<>Kings שנותרו: <InlineCard card="Kh"/> <InlineCard card="Kd"/>. KKK + KK = <Term k="full-house">full house</Term> מלכים מלאים.</>}
-            />
-            <BreakdownItem
-              title={<>ליריב J (<Term k="two-pair">Two Pair</Term> Ks & Js)</>}
-              pct="~13%"
-              detail={<>Js שנותרו: <InlineCard card="Jc"/> <InlineCard card="Jh"/> <InlineCard card="Jd"/>. KK + JJ גובר על KK + 77.</>}
-            />
-            <BreakdownItem
-              title={<><Term k="flush">פלאש</Term> (2 ספייד ביד היריב)</>}
-              pct="~4%"
-              detail={<>על הלוח 3 ספייד (<InlineCard card="Ks"/><InlineCard card="5s"/><InlineCard card="Js"/>). יש לך רק <InlineCard card="7s"/>. 2 ספייד מתוך 9 → <Term k="flush">flush</Term>.</>}
-            />
-            <BreakdownItem
-              title={<><Term k="pocket-pair">זוג כיס</Term> גבוה (88-QQ)</>}
-              pct="~2%"
-              detail={<>JJ אסור (J♠ על הלוח). שאר נותנים <Term k="two-pair">שני זוגות</Term> גבוהים יותר.</>}
-            />
-            <li className="ar-breakdown-item ar-breakdown-highlight">
-              <div className="ar-breakdown-header">
-                <div className="ar-breakdown-title-row">
-                  <span className="ar-breakdown-marker positive">⊳</span>
-                  בפועל מה היה לבוט
-                </div>
-                <span className="ar-breakdown-pct" style={{color: C.gold}}>
-                  <InlineCard card="6s"/> <InlineCard card="5h"/>
-                </span>
-              </div>
-              <div className="ar-breakdown-detail" style={{background:'rgba(201,168,76,0.08)', padding:8, borderRadius:4, marginTop:4}}>
-                KK (מהלוח) + 55 = <Term k="two-pair">שני זוגות</Term> מלכים וחמישיות. <strong>שלך KK77 הייתה צריכה לנצח</strong> כי 7 &gt; 5. שווה לבדוק את לוגיקת ה-<Term k="showdown">showdown</Term>.
-              </div>
-            </li>
+            {breakdown.map((item, i) => (
+              <BreakdownItem key={i} {...item}/>
+            ))}
           </ul>
         </>
       )}
@@ -482,77 +585,37 @@ function BreakdownItem({ title, pct, detail, positive=false }) {
       <div className="ar-breakdown-header">
         <div className="ar-breakdown-title-row">
           <span className={`ar-breakdown-marker ${positive?'positive':''}`}>{positive?'⊳':'▸'}</span>
-          {title}
+          <ReasonText text={title}/>
         </div>
         <span className={`ar-breakdown-pct ${positive?'positive':''}`}>{pct}</span>
       </div>
-      <div className="ar-breakdown-detail">{detail}</div>
+      <div className="ar-breakdown-detail">
+        <ReasonText text={detail}/>
+      </div>
     </li>
   );
 }
 
-function EVPanel({ street }) {
-  const data = {
-    preflop: {
-      formula:`EV = (38% × $20) − (62% × $20)\n   = $7.60 − $12.40\n   = -$4.80 → reverse implied: -$1.20`,
-      detail: <>ה-<Term k="call">call</Term> עולה $20 לתוך <Term k="pot">סיר</Term> של $20. <Term k="pot-odds">Pot odds</Term> מצדיקים בקושי, אבל <Term k="reverse-implied-odds">reverse implied odds</Term> משלימים: עם יד חלשה ש"מצליחה" — לעיתים קרובות עדיין מפסידה.</>,
-      value:'-$1.20',
-    },
-    flop: {
-      formula:`EV(Check) = 0  (לא הושקע כסף)\nEV(See Turn for free) = +$0.40`,
-      detail: <><Term k="check">Check</Term> עולה $0. אבל לראות את הטרן בחינם — אם יביא <Term k="two-pair">two pair</Term> או <Term k="trips">trips</Term>, את משדרגת.</>,
-      value:'+$0.40',
-    },
-    turn: {
-      formula:`EV = (72% × $80) − (28% × $20)\n   = $57.60 − $5.60\n   = +$52.00 → adj: +$8.60`,
-      detail: <>עם 72% <Term k="equity">אקוויטי</Term>, ה-<Term k="call">call</Term> של $20 לתוך <Term k="pot">סיר</Term> $80 רווחי בענק. גם אחרי <Term k="variance">variance</Term> ו-<Term k="implied-odds">implied odds</Term>.</>,
-      value:'+$8.60',
-    },
-    river: {
-      formula:`EV = 50% × Pot − 50% × 0\n   = 0.5 × $120\n   = +$60`,
-      detail: <>תיקו = חצי מה<Term k="pot">סיר</Term>. סיר $120 → רווח $60. למרות שמתמטית היית צריכה לקחת הכל.</>,
-      value:'+$60',
-    },
-  }[street];
-
+function EVPanel({ data }) {
   return (
     <div className="ar-panel">
       <div className="ar-formula-label">חישוב $<Term k="ev">EV</Term></div>
       <div className="ar-formula-code">{data.formula}</div>
       <div className="ar-simple-result">
-        <div className="ar-simple-detail">{data.detail}</div>
-        <div className="ar-simple-value">{data.value}</div>
+        <div className="ar-simple-detail"><ReasonText text={data.detail}/></div>
+        <div className="ar-simple-value">{data.value || data.result}</div>
       </div>
     </div>
   );
 }
 
-function RankPanel({ street }) {
-  const data = {
-    preflop: {
-      detail: <>אין צירוף — היד נשענת על ה<Term k="high-card">קלף הגבוה</Term> (10) בלבד. הצורה החלשה ביותר.</>,
-      value: 'High Card',
-    },
-    flop: {
-      detail: <><Term k="one-pair">זוג</Term> שביעיות (<InlineCard card="7s"/> ביד + <InlineCard card="7h"/> בלוח) עם <Term k="kicker">kicker</Term> עשירייה.</>,
-      value: 'One Pair',
-    },
-    turn: {
-      detail: <><Term k="two-pair">שני זוגות</Term> — מלכים ושביעיות. <InlineCard card="Ks"/><InlineCard card="Kc"/> מהלוח + <InlineCard card="7s"/><InlineCard card="7h"/>.</>,
-      value: 'Two Pair',
-    },
-    river: {
-      detail: <><Term k="two-pair">שני זוגות</Term> — מלכים ושביעיות, <Term k="kicker">kicker</Term> J. ליריב: מלכים וחמישיות.</>,
-      value: 'Two Pair',
-    },
-  }[street];
-
+function RankPanel({ data }) {
   return (
     <div className="ar-panel">
       <div className="ar-formula-label">דירוג</div>
       <div className="ar-simple-result">
-        <div className="ar-simple-detail">{data.detail}</div>
-        <div className="ar-simple-value">{data.value}</div>
+        <div className="ar-simple-detail"><ReasonText text={data.detail || ''}/></div>
+        <div className="ar-simple-value">{data.result}</div>
       </div>
     </div>
   );
@@ -622,6 +685,12 @@ const CSS = `
   overflow: hidden; transition: border-color 0.2s;
 }
 .ar-acc.active { border-color: ${C.gold}; }
+.ar-acc-disabled { opacity: 0.5; }
+.ar-acc-disabled .ar-acc-head { cursor: not-allowed; }
+.ar-stage-not-reached {
+  font-size: 11px; color: ${C.creamMute};
+  margin-right: 6px; font-style: italic;
+}
 .ar-acc-head {
   width: 100%; background: transparent; border: none;
   padding: 13px 14px; font-family: ${FONT}; color: ${C.cream};
