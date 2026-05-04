@@ -1922,7 +1922,7 @@ function BotBattleMode({ onExit }) {
 
       {/* Header */}
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-        <button onClick={()=>{stopAutoPlay();onExit();}} style={{padding:"7px 12px",borderRadius:7,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.07)",color:"#8a9a8a",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:12}}>← יציאה</button>
+        <button onClick={()=>{stopAutoPlay();onExit();history.pushState({screen:"menu"},"","");}} style={{padding:"7px 12px",borderRadius:7,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.07)",color:"#8a9a8a",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:12}}>← יציאה</button>
         <div style={{fontSize:18,fontWeight:700,color:"#c9a84c",letterSpacing:1}}>🤖 קרב בוטים</div>
       </div>
 
