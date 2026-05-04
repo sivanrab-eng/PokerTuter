@@ -1,19 +1,113 @@
-<!doctype html>
-<html lang="he">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0d3320"/>
-    <meta name="mobile-web-app-capable" content="yes"/>
-    <meta name="apple-mobile-web-app-capable" content="yes"/>
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-    <meta name="apple-mobile-web-app-title" content="מאסטר פוקר"/>
-    <link rel="manifest" href="/PokerTuter/manifest.json"/>
-    <link rel="apple-touch-icon" href="/PokerTuter/icon-192.png"/>
-    <title>מאסטר פוקר</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        
+        html, body {
+            margin: 0; padding: 0;
+            height: 100vh; width: 100vw;
+            overflow: hidden; /* ביטול גלישה */
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: #0a2e1a;
+            color: #ffffff;
+        }
+
+        #menu-screen {
+            display: flex; flex-direction: column;
+            height: 100%; padding: 16px;
+            max-width: 500px; margin: 0 auto;
+        }
+
+        .top-nav { display: flex; gap: 12px; margin-bottom: 24px; }
+
+        .pill-btn {
+            flex: 1; height: 48px; border-radius: 24px; /* Pill shape */
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.1);
+            color: white; font-weight: 600;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        .section-header {
+            font-size: 1.1rem; font-weight: 800;
+            margin: 15px 0 10px; color: #e0e0e0;
+            border-right: 4px solid #4ade80; padding-right: 8px;
+        }
+
+        .cards-container { display: grid; gap: 10px; }
+        
+        /* השורה המנצחת של 3 כרטיסים */
+        .triple-grid { grid-template-columns: repeat(3, 1fr); }
+        .double-grid { grid-template-columns: repeat(2, 1fr); }
+
+        .card {
+            background: linear-gradient(145deg, #144d2f, #0d3a24);
+            border-radius: 16px; padding: 12px;
+            position: relative; border: 1px solid rgba(255,255,255,0.05);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            text-align: right; min-height: 90px;
+            display: flex; flex-direction: column; justify-content: flex-end;
+        }
+
+        .card-title { font-weight: 700; font-size: 0.9rem; margin-bottom: 2px; }
+        .card-subtitle { font-size: 0.75rem; color: #4ade80; }
+
+        .info-icon {
+            position: absolute; top: 8px; left: 8px;
+            width: 20px; height: 20px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%; display: flex;
+            align-items: center; justify-content: center; font-size: 12px;
+        }
+
+        .btn-red { background: linear-gradient(145deg, #7a1a1a, #5a1414); }
+        .btn-purple { background: linear-gradient(145deg, #4c1d95, #3b1675); }
+    </style>
+</head>
+<body>
+
+<div id="menu-screen">
+    <div class="top-nav">
+        <div class="pill-btn">שיתוף</div>
+        <div class="pill-btn">שמירה</div>
+    </div>
+
+    <div class="section-header">תיאוריה ולמידה</div>
+    <div class="cards-container double-grid">
+        <div class="card">
+            <span class="info-icon">?</span>
+            <span class="card-title">שיעורים</span>
+            <span class="card-subtitle">4 שיעורים</span>
+        </div>
+        <div class="card">
+            <span class="info-icon">?</span>
+            <span class="card-title">כלים ועזרים</span>
+            <span class="card-subtitle">מחשבונים</span>
+        </div>
+    </div>
+
+    <div class="section-header">תרגול ומשחק</div>
+    <div class="cards-container triple-grid">
+        <div class="card btn-purple">
+            <span class="info-icon">?</span>
+            <span class="card-title">משחק</span>
+            <span class="card-subtitle">P2P</span>
+        </div>
+        <div class="card btn-red">
+            <span class="info-icon">?</span>
+            <span class="card-title">בוטים</span>
+            <span class="card-subtitle">AI</span>
+        </div>
+        <div class="card">
+            <span class="info-icon">?</span>
+            <span class="card-title">חופשי</span>
+            <span class="card-subtitle">סולו</span>
+        </div>
+    </div>
+</div>
+
+</body>
 </html>
