@@ -540,19 +540,20 @@ ${picked?picked.prompt(gs.playerHand,gs.botHand,comm):""}
     }
   };
 
-  const triggerAnalysis = (handGs, handResultData) => {
+  const triggerAnalysis = async (handGs, handResultData) => {
     setShowAnalysis(true);
     setAnalysisText("");
     setAnalysisLoading(true);
     const actions = actionLogRef.current;
-    const firstAction = actions.length > 0 ? actions[actions.length-1] : null;
-    const systemPrompt = `You are an expert Poker Theory (GTO) Analyst for the "Master Poker" educational app. Your goal is to provide a concise, data-driven post-session review for a user who just finished a "Learn while Playing" hand. Respond ONLY in Hebrew. Use **bold** for key terms. Be professional, analytical, yet encouraging.`;
+    const systemPrompt = `אתה אנליסט מומחה לתורת המשחקים בפוקר (GTO) באפליקציית "מאסטר פוקר".
+תמיד עונה בעברית. שפה מקצועית, אנליטית, אך מעודדת.
+השתמש ב-**טקסט מודגש** למונחי מפתח. מבנה ברור וקריא.`;
     const userMsg = `נתוני הסיבוב:
 קלפי השחקן: ${handGs.playerHand.join(", ")}
 קלפי הבוט: ${handGs.botHand.join(", ")}
 קלפי הלוח: ${handGs.community.join(", ")}
 תוצאה: ${handResultData?.type==="fold"?"פולד" : handResultData?.won?"שחקן ניצח" : handResultData?.tied?"תיקו":"בוט ניצח"}
-${handResultData?.pe ? `יד שחקן: ${handResultData.pe.name}, יד בוט: ${handResultData.be.name}` : ""}
+${handResultData?.pe ? `יד שחקן סופית: ${handResultData.pe.name}, יד בוט: ${handResultData.be.name}` : ""}
 פעולות השחקן (מהאחרונה לראשונה): ${actions.map(a=>`${a.round}: ${a.action}`).join(" | ") || "לא נרשמו"}
 
 ספק ניתוח לפי המבנה הבא:
@@ -571,19 +572,24 @@ ${handResultData?.pe ? `יד שחקן: ${handResultData.pe.name}, יד בוט: $
 - **מה לשפר:** דליפה טקטית אחת לתקן
 - **לזכור להמשך:** 2-3 נקודות קצרות`;
 
-    fetch("https://api.anthropic.com/v1/messages", {
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({
-        model:"claude-sonnet-4-20250514",
-        max_tokens:1000,
-        system: systemPrompt,
-        messages:[{role:"user",content:userMsg}]
-      })
-    })
-    .then(r=>r.json())
-    .then(d=>{ setAnalysisText(d.content?.[0]?.text||"לא ניתן לטעון ניתוח."); setAnalysisLoading(false); })
-    .catch(()=>{ setAnalysisText("שגיאה בטעינת הניתוח."); setAnalysisLoading(false); });
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          model:"claude-sonnet-4-20250514",
+          max_tokens:1000,
+          system: systemPrompt,
+          messages:[{role:"user",content:userMsg}]
+        })
+      });
+      const data = await res.json();
+      const text = data.content?.find(b=>b.type==="text")?.text || "לא ניתן לטעון ניתוח כעת. נסה שוב בסיבוב הבא.";
+      setAnalysisText(text);
+    } catch {
+      setAnalysisText("**ניתוח לא זמין כרגע**\n\nהמשך לשחק — הניסיון הוא המורה הטוב ביותר! 🃏");
+    }
+    setAnalysisLoading(false);
   };
 
   if(!gs) return <div style={{color:"#6a9a6a",textAlign:"center",padding:40}}>מכין שולחן...</div>;
