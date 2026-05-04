@@ -541,6 +541,8 @@ function MetricPill({ label, result, active, onClick }) {
 
 // ===== Equity panel — דינמי על בסיס breakdown מהשלב =====
 function EquityPanel({ street, data, breakdown=[], handStr }) {
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
+
   return (
     <div className="ar-panel">
       <div className="ar-stats-row">
@@ -561,14 +563,25 @@ function EquityPanel({ street, data, breakdown=[], handStr }) {
       )}
 
       {breakdown.length > 0 && (
-        <>
-          <div className="ar-breakdown-title">מה גובר על {handStr || 'היד'}:</div>
-          <ul className="ar-breakdown">
-            {breakdown.map((item, i) => (
-              <BreakdownItem key={i} {...item}/>
-            ))}
-          </ul>
-        </>
+        <div className={`ar-breakdown-toggle-wrap ${breakdownOpen?'open':''}`}>
+          <button
+            className="ar-breakdown-toggle"
+            onClick={(e)=>{e.stopPropagation(); setBreakdownOpen(o=>!o);}}
+            aria-expanded={breakdownOpen}
+          >
+            <span className="ar-breakdown-toggle-chevron">›</span>
+            <span className="ar-breakdown-toggle-label">
+              מה גובר על <RenderHandCards handStr={handStr}/>
+            </span>
+          </button>
+          {breakdownOpen && (
+            <ul className="ar-breakdown">
+              {breakdown.map((item, i) => (
+                <BreakdownItem key={i} {...item}/>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
 
       <div className="ar-formula-block">
@@ -576,6 +589,18 @@ function EquityPanel({ street, data, breakdown=[], handStr }) {
         <div className="ar-formula-code">Equity = Wins / Total Simulations × 100</div>
       </div>
     </div>
+  );
+}
+
+// Render "9♦ 8♠" as actual visual cards inside the button label
+function RenderHandCards({ handStr }) {
+  if(!handStr) return <>היד</>;
+  const cards = handStr.split(' ').filter(Boolean);
+  if(cards.length === 0) return <>היד</>;
+  return (
+    <span className="ar-handstr-cards">
+      {cards.map((c, i) => <InlineCard key={i} card={c}/>)}
+    </span>
   );
 }
 
@@ -797,6 +822,67 @@ const CSS = `
   font-size: 13px; color: ${C.gold}; font-weight: bold;
   margin-bottom: 7px; padding-bottom: 5px;
   border-bottom: 1px solid ${C.divider};
+}
+
+/* Collapsible breakdown button */
+.ar-breakdown-toggle-wrap {
+  margin-bottom: 11px;
+  border: 1px solid ${C.goldSoft};
+  border-radius: 6px;
+  overflow: hidden;
+  transition: border-color 0.2s, background 0.2s;
+}
+.ar-breakdown-toggle-wrap.open {
+  border-color: ${C.gold};
+  background: rgba(201,168,76,0.05);
+}
+.ar-breakdown-toggle {
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 11px 13px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  font-family: ${FONT};
+  color: ${C.gold};
+  font-size: 14px;
+  font-weight: bold;
+  text-align: right;
+  direction: rtl;
+  transition: background 0.15s;
+}
+.ar-breakdown-toggle:active { background: rgba(201,168,76,0.08); }
+.ar-breakdown-toggle-chevron {
+  display: inline-block;
+  font-size: 18px;
+  color: ${C.gold};
+  transition: transform 0.25s;
+  flex-shrink: 0;
+  width: 14px;
+  text-align: center;
+}
+.ar-breakdown-toggle-wrap.open .ar-breakdown-toggle-chevron {
+  transform: rotate(90deg);
+}
+.ar-breakdown-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+.ar-handstr-cards {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  direction: ltr;
+}
+.ar-breakdown-toggle-wrap .ar-breakdown {
+  margin: 0;
+  padding: 0 13px 11px 13px;
+  border-top: 1px solid ${C.divider};
+  padding-top: 10px;
 }
 .ar-breakdown { list-style: none; padding: 0; margin-bottom: 11px; }
 .ar-breakdown-item { padding: 7px 0; border-bottom: 1px dashed ${C.divider}; }
