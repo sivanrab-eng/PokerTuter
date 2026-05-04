@@ -425,6 +425,10 @@ function CoachMode({ onExit }) {
   const [showGlossary, setShowGlossary] = useState(false);
   const [glossaryOpen, setGlossaryOpen] = useState(null);
   const [stageTooltip, setStageTooltip] = useState(null);
+  const [showAnalysis, setShowAnalysis] = useState(false);
+  const [analysisText, setAnalysisText] = useState("");
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const actionLogRef = useRef([]);
 
   const CONCEPTS = [
     { key:"pot-odds", label:"Pot Odds", emoji:"🎲", prompt: (ph, bh, comm) =>
@@ -475,7 +479,7 @@ function CoachMode({ onExit }) {
     if(!gs) return;
     const isGood = quizChoice===action;
     setScore(s=>({good:isGood?s.good+1:s.good, total:s.total+1}));
-    setActionLog(l=>[{action,round:stage,id:Date.now()},...l].slice(0,8));
+    setActionLog(l=>{const updated=[{action,round:stage,id:Date.now()},...l].slice(0,8); actionLogRef.current=updated; return updated;});
     trackEvent("player_action", { action, mode: "coached", stage, quiz_correct: isGood });
 
     let newPot = pot;
@@ -536,7 +540,88 @@ ${picked?picked.prompt(gs.playerHand,gs.botHand,comm):""}
     }
   };
 
+  const triggerAnalysis = (handGs, handResultData) => {
+    setShowAnalysis(true);
+    setAnalysisText("");
+    setAnalysisLoading(true);
+    const actions = actionLogRef.current;
+    const firstAction = actions.length > 0 ? actions[actions.length-1] : null;
+    const systemPrompt = `You are an expert Poker Theory (GTO) Analyst for the "Master Poker" educational app. Your goal is to provide a concise, data-driven post-session review for a user who just finished a "Learn while Playing" hand. Respond ONLY in Hebrew. Use **bold** for key terms. Be professional, analytical, yet encouraging.`;
+    const userMsg = `נתוני הסיבוב:
+קלפי השחקן: ${handGs.playerHand.join(", ")}
+קלפי הבוט: ${handGs.botHand.join(", ")}
+קלפי הלוח: ${handGs.community.join(", ")}
+תוצאה: ${handResultData?.type==="fold"?"פולד" : handResultData?.won?"שחקן ניצח" : handResultData?.tied?"תיקו":"בוט ניצח"}
+${handResultData?.pe ? `יד שחקן: ${handResultData.pe.name}, יד בוט: ${handResultData.be.name}` : ""}
+פעולות השחקן (מהאחרונה לראשונה): ${actions.map(a=>`${a.round}: ${a.action}`).join(" | ") || "לא נרשמו"}
+
+ספק ניתוח לפי המבנה הבא:
+
+**1. הערכת הצעד הראשון:**
+- זהה את הפעולה הראשונה שהשחקן ביצע
+- האם הייתה נכונה לפי אסטרטגיית פוקר סטנדרטית?
+- אם לא — הסבר מה היה עדיף ולמה
+
+**2. ניתוח המהלך הקריטי:**
+- הדגש את המהלך המשמעותי ביותר בסיבוב
+- תן פירוט טכני קצר
+
+**3. סיכום האנליסט:**
+- **מה עשית טוב:** נקודת חוזק אחת
+- **מה לשפר:** דליפה טקטית אחת לתקן
+- **לזכור להמשך:** 2-3 נקודות קצרות`;
+
+    fetch("https://api.anthropic.com/v1/messages", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        model:"claude-sonnet-4-20250514",
+        max_tokens:1000,
+        system: systemPrompt,
+        messages:[{role:"user",content:userMsg}]
+      })
+    })
+    .then(r=>r.json())
+    .then(d=>{ setAnalysisText(d.content?.[0]?.text||"לא ניתן לטעון ניתוח."); setAnalysisLoading(false); })
+    .catch(()=>{ setAnalysisText("שגיאה בטעינת הניתוח."); setAnalysisLoading(false); });
+  };
+
   if(!gs) return <div style={{color:"#6a9a6a",textAlign:"center",padding:40}}>מכין שולחן...</div>;
+
+  // Analysis screen
+  if(showAnalysis) {
+    const Bold = ({children})=><span style={{color:"#c9a84c",fontWeight:700}}>{children}</span>;
+    const renderMd = (text) => {
+      if(!text) return null;
+      return text.split("\n").map((line,li)=>{
+        const parts = line.split(/\*\*(.*?)\*\*/g);
+        const rendered = parts.map((p,i)=>i%2===1?<Bold key={i}>{p}</Bold>:p);
+        return <div key={li} style={{marginBottom: line.startsWith("**")&&line.endsWith("**")?6:3, lineHeight:1.65, fontSize:12, color:"#b4c8b4"}}>{rendered}</div>;
+      });
+    };
+    return (
+      <div style={{minHeight:"100vh",background:"radial-gradient(ellipse at 30% 20%,#0d3320,#061a0e 40%,#030d07 100%)",fontFamily:"Georgia,serif",color:"#d4e8d4",padding:"16px",direction:"rtl",boxSizing:"border-box",overflowY:"auto"}}>
+        <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}`}</style>
+        <div style={{textAlign:"center",marginBottom:14,animation:"fadeUp 0.4s ease"}}>
+          <div style={{fontSize:20,fontWeight:700,color:"#c9a84c",marginBottom:3}}>📊 ניתוח הסשן</div>
+          <div style={{fontSize:11,color:"#4a7a4a"}}>סיבוב {roundNum} הסתיים</div>
+        </div>
+        <div style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(201,168,76,0.2)",borderRadius:12,padding:"14px 16px",minHeight:180,animation:"fadeUp 0.4s ease 0.1s both"}}>
+          {analysisLoading
+            ? <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:10,padding:"30px 0"}}>
+                <div style={{display:"flex",gap:6}}>{[0,1,2].map(i=><div key={i} style={{width:8,height:8,borderRadius:"50%",background:"#c9a84c",animation:"bounce 1.2s infinite",animationDelay:`${i*0.2}s`}}/>)}</div>
+                <div style={{fontSize:11,color:"#6a9a6a"}}>מנתח את הסיבוב...</div>
+              </div>
+            : renderMd(analysisText)
+          }
+        </div>
+        <div style={{display:"flex",gap:8,marginTop:14}}>
+          <button onClick={()=>{setShowAnalysis(false);setRoundNum(n=>n+1);deal();}} style={{flex:1,padding:14,borderRadius:10,border:"none",background:"linear-gradient(135deg,#27ae60,#1e8449)",color:"#fff",fontFamily:"Georgia,serif",fontSize:14,fontWeight:700,cursor:"pointer",boxShadow:"0 3px 12px rgba(39,174,96,0.3)"}}>🔄 סיבוב חדש</button>
+          <button onClick={()=>{setShowAnalysis(false);onExit();history.pushState({screen:"menu"},"","");}} style={{padding:"14px 16px",borderRadius:10,border:"1px solid rgba(255,255,255,0.1)",background:"rgba(255,255,255,0.05)",color:"#8a9a8a",fontFamily:"Georgia,serif",fontSize:12,cursor:"pointer"}}>← יציאה</button>
+        </div>
+      </div>
+    );
+  }
 
   const communityShow = gs.community.slice(0, revealed);
   const ctx = analyzeContext(gs.playerHand, communityShow);
@@ -688,7 +773,7 @@ ${picked?picked.prompt(gs.playerHand,gs.botHand,comm):""}
           ))}
         </div>
       ):(
-        <Btn label="🔄 סיבוב חדש" variant="gold" full onClick={()=>{setRoundNum(n=>n+1);deal();}}/>
+        <Btn label="📊 ניתוח הסשן" variant="gold" full onClick={()=>triggerAnalysis(gs, resultData)}/>
       )}
     </div>
   );
